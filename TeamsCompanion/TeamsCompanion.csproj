@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="..\esp32\sprites\*.png" Link="sprites\%(Filename)%(Extension)" />
+    <Resource Include="..\sprites\*.png" Link="sprites\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

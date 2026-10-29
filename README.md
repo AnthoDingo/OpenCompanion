@@ -43,9 +43,9 @@ Sans l'application (moniteur série), le firmware affiche ses libellés par déf
 
 Aucun câblage ni soudure : l'écran est intégré à la carte. La batterie est inutile ici, car le statut arrive par le câble USB.
 
-**Version de la carte :** une étiquette « V2QC » indique la version V2, celle configurée par défaut. Pour l'ancienne version, mettez `SYS_EN_PIN=35` et `BUZZER_PIN=33` dans `esp32/platformio.ini`. La broche SYS_EN garde la carte alimentée, et le buzzer est coupé pour éviter qu'il chauffe.
+**Version de la carte :** une étiquette « V2QC » indique la version V2, celle configurée par défaut. Pour l'ancienne version, mettez `SYS_EN_PIN=35` et `BUZZER_PIN=33` dans le `platformio.ini` du dépôt firmware. La broche SYS_EN garde la carte alimentée, et le buzzer est coupé pour éviter qu'il chauffe.
 
-Si les couleurs sont inversées, retirez `-D TFT_INVERSION_ON=1` dans `esp32/platformio.ini`.
+Si les couleurs sont inversées, retirez `-D TFT_INVERSION_ON=1` dans ce même `platformio.ini`.
 
 ### Boîtier imprimé en 3D
 
@@ -61,15 +61,7 @@ Avant d'imprimer, mesurez `front_stack` (épaisseur de la vitre et de l'écran) 
 
 ### ESP32
 
-1. Installez [PlatformIO](https://platformio.org/) (extension VS Code ou `pip install platformio`).
-2. Flashez :
-   ```
-   cd esp32
-   pio run -t upload
-   ```
-3. Si le téléversement ne trouve pas la carte (premier flash, ou firmware planté) : débranchez-la, puis rebranchez-la en maintenant le bouton **BOOT** et relancez la commande.
-
-Pour tester sans l'application, envoyez `AVAILABLE`, `AWAY`, `CALL`, `VIDEO`, `BUSY`, `DND` ou `OFFLINE` depuis un moniteur série (`pio device monitor`). Ajoutez un libellé pour le forcer : `AVAILABLE|Disponible`.
+Le firmware est dans un dépôt séparé : [OpenCompanion-Firmware](https://github.com/AnthoDingo/OpenCompanion-Firmware). Suivez son README pour compiler et flasher la carte (PlatformIO). Une fois un premier firmware flashé, l'application installe les mises à jour suivantes toute seule (voir plus bas).
 
 ### Application Windows
 
@@ -88,7 +80,7 @@ L'application attend que l'écran soit branché et se reconnecte toute seule s'i
 
 Quand une release plus récente que le firmware branché existe sur le repo GitHub, la carte **Écran** de la fenêtre affiche un bouton **Installer le firmware X.Y**. L'application télécharge `firmware.bin` et esptool (l'outil officiel d'Espressif, téléchargé une seule fois dans `%LOCALAPPDATA%\OpenCompanion`). Elle redémarre ensuite l'écran en mode téléchargement, sans toucher au bouton BOOT, puis le flashe.
 
-Pour publier une release, mettez à jour `FW_VERSION` dans `esp32/src/main.cpp` (`0x0130` pour 1.3), puis poussez le tag correspondant : `git tag v1.3 && git push origin v1.3`. Le workflow `firmware` crée la release avec un seul binaire : la langue de l'écran vient de l'application, pas du firmware. L'application lit les releases sans authentification, donc le repo doit être public.
+Pour publier une release, dans le dépôt firmware, mettez à jour `FW_VERSION` dans `src/main.cpp` (`0x0130` pour 1.3), puis poussez le tag correspondant : `git tag v1.3 && git push origin v1.3`. Son workflow `firmware` crée la release avec un seul binaire : la langue de l'écran vient de l'application, pas du firmware. L'application lit les releases sans authentification, donc le dépôt firmware doit être public.
 
 Pour un lancement au démarrage de Windows :
 
@@ -97,18 +89,18 @@ Pour un lancement au démarrage de Windows :
 
 ## Modifier le compagnon
 
-Les sprites sont des PNG 32×32 dans `esp32/sprites/`, affichés 6 fois plus grands. Ils se retouchent avec n'importe quel éditeur pixel art (Aseprite, Piskel…), en gardant :
+Les sprites sont des PNG 32×32 dans `sprites/`, affichés 6 fois plus grands. Ils se retouchent avec n'importe quel éditeur pixel art (Aseprite, Piskel…), en gardant :
 
 - un fond transparent ;
 - uniquement les couleurs de la palette définie dans `png2h.py`.
 
-Après modification, régénérez `esp32/src/sprites.h` :
+Après modification, régénérez `sprites/sprites.h`, puis recopiez-le dans `src/` du dépôt firmware :
 
 ```
-python esp32/sprites/png2h.py
+python sprites/png2h.py
 ```
 
-Un nouveau fichier `wave.png` devient la frame `F_WAVE`, à ajouter dans une séquence `A_*` de `esp32/src/main.cpp`. Les couleurs du corps et des fonds se règlent dans la fonction `draw()` du même fichier.
+Un nouveau fichier `wave.png` devient la frame `F_WAVE`, à ajouter dans une séquence `A_*` de `src/main.cpp` du dépôt firmware. Les couleurs du corps et des fonds se règlent dans la fonction `draw()` du même fichier.
 
 ## Émulateur
 
@@ -120,4 +112,4 @@ dotnet run --project Emulator
 
 `dotnet run --project Emulator -- --snapshot preview.png` génère l'aperçu en haut de ce README.
 
-L'émulateur reproduit la fonction `draw()` de `esp32/src/main.cpp` à partir des mêmes PNG. Une modification des séquences, des couleurs ou de la disposition doit être faite aux deux endroits.
+L'émulateur reproduit la fonction `draw()` du firmware ([OpenCompanion-Firmware](https://github.com/AnthoDingo/OpenCompanion-Firmware), `src/main.cpp`) à partir des mêmes PNG. Une modification des séquences, des couleurs ou de la disposition doit être faite aux deux endroits.

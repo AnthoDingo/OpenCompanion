@@ -1,7 +1,8 @@
-"""Convertit sprites/*.png (32x32, couleurs de PALETTE, fond transparent) en src/sprites.h.
+"""Convertit sprites/*.png (32x32, couleurs de PALETTE, fond transparent) en sprites/sprites.h.
 
 Usage : python sprites/png2h.py   (à relancer après chaque modif d'un PNG)
 Le nom du fichier donne le nom de la frame : idle.png -> F_IDLE.
+Recopiez ensuite sprites.h dans src/ du dépôt OpenCompanion-Firmware.
 """
 import sys
 from pathlib import Path
@@ -44,5 +45,5 @@ for name, px in frames.items():
     out += ["    " + ",".join(map(str, px[y * SIZE:(y + 1) * SIZE])) + "," for y in range(SIZE)]
     out.append("  },")
 out.append("};")
-(here.parent / "src" / "sprites.h").write_text("\n".join(out) + "\n", encoding="utf-8")
-print(f"{len(frames)} frames -> src/sprites.h")
+(here / "sprites.h").write_text("\n".join(out) + "\n", encoding="utf-8")
+print(f"{len(frames)} frames -> sprites/sprites.h (à recopier dans src/ du dépôt firmware)")
