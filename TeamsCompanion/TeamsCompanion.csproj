@@ -22,6 +22,8 @@
 
   <ItemGroup>
     <PackageReference Include="HidSharp" Version="2.6.4" />
+    <!-- mise à jour du firmware : touche 1200 bauds + liste des ports COM -->
+    <PackageReference Include="System.IO.Ports" Version="10.0.0" />
     <PackageReference Include="WPF-UI" Version="4.3.0" />
     <!-- mode Graph : connexion Teams via Microsoft Graph (client public MS, scope Presence.Read) -->
     <PackageReference Include="Microsoft.Identity.Client" Version="4.66.2" />

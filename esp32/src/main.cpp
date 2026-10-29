@@ -3,13 +3,14 @@
 #include "USBHIDVendor.h"
 #include "sprites.h"
 
-// Langue de l'affichage, choisie à la compilation (-D FW_LANG=en, voir platformio.ini) : lang/<code>.h
-#ifndef FW_LANG
-#define FW_LANG fr
-#endif
-#define STR_(x) #x
-#define LANG_FILE(l) STR_(lang/l.h)
-#include LANG_FILE(FW_LANG)
+// Libellés par défaut, en autonome : l'appli envoie les siens dans la langue choisie (STATUT|Libellé).
+// Police 4 sans accents.
+#define TXT_AVAILABLE "Disponible"
+#define TXT_AWAY "Absent"
+#define TXT_CALL "En appel"
+#define TXT_VIDEO "En visio"
+#define TXT_BUSY "Occupe"
+#define TXT_DND "Ne pas deranger"
 
 // Reçoit une ligne par statut (OFFLINE, AVAILABLE, AWAY, CALL, VIDEO, BUSY, DND) en HID USB,
 // ou sur le port série USB pour tester à la main depuis un moniteur série, et anime le compagnon (sprites 32x32 de sprites/*.png, agrandis x SCALE).
@@ -36,7 +37,7 @@ TFT_eSprite spr(&tft);
 State state = OFFLINE;
 uint32_t lastMsg = 0;
 String line;
-String recvLabel;               // libellé localisé reçu de l'appli (vide = libellé compilé FW_LANG)
+String recvLabel;               // libellé localisé reçu de l'appli (vide = libellé par défaut)
 State recvLabelState = OFFLINE;  // statut auquel recvLabel se rapporte
 
 State parse(const String& s) {
@@ -105,6 +106,21 @@ void drawHand(int x, int y, const uint16_t* pal) {
   spr.fillCircle(x - 3, y - 3, 3, pal[4]);
 }
 
+// OFFLINE : câble qui sort de derrière le compagnon (bas droit) et finit par une prise débranchée posée au sol.
+// Coordonnées pour le sprite F_OFFLINE en (ox, oy).
+void drawPlug(int ox, int oy) {
+  const float x0 = ox + 25 * SCALE, y0 = oy + 26 * SCALE, x1 = ox + 25 * SCALE, y1 = oy + 36 * SCALE,
+              x2 = ox + 28 * SCALE, y2 = oy + 33 * SCALE;  // courbe de Bézier : départ, creux, arrivée
+  for (int i = 0; i <= 24; i++) {
+    float k = i / 24.f, a = (1 - k) * (1 - k), b = 2 * k * (1 - k), c = k * k;
+    spr.fillCircle(a * x0 + b * x1 + c * x2, a * y0 + b * y1 + c * y2, 3, TFT_BLACK);
+  }
+  int px = x2, py = y2;
+  spr.fillRoundRect(px - 2, py - 9, 20, 18, 4, tft.color24to16(0x444444));
+  spr.fillRect(px + 18, py - 6, 9, 4, TFT_LIGHTGREY);
+  spr.fillRect(px + 18, py + 2, 9, 4, TFT_LIGHTGREY);
+}
+
 // Rend true pendant l'animation du panneau, pour que loop() redessine sans attendre.
 bool draw(uint32_t t) {
   static State shown = OFFLINE;
@@ -115,7 +131,7 @@ bool draw(uint32_t t) {
   Anim anim = {A_OFFLINE, 1, 1000};
   uint16_t pal[sizeof SPR_PALETTE / sizeof *SPR_PALETTE];
   memcpy(pal, SPR_PALETTE, sizeof pal);
-  const char* label = TXT_OFFLINE;
+  const char* label = "";  // hors ligne : pas de texte
   uint32_t bg = 0x8A8886;  // couleurs de présence Teams (orange au lieu du rouge pour « occupé »)
 
   // Corps violet Teams (index 2-4 : base, ombre, reflet) pour ressortir sur tous les fonds.
@@ -155,6 +171,7 @@ bool draw(uint32_t t) {
   float baseY = startY + (lowY - startY) * u;
   int signY = baseY - (baseY - 70) * s + 15 * sinf(2 * PI * u) + bob;
   if (state == DND && !signFront) { drawStop(signX, signY); drawHand(signX, signY + 66, pal); }
+  if (state == OFFLINE) drawPlug(ox, oy);
   drawFrame(f, ox, oy, pal);
   if (state == DND && signFront) { drawStop(signX, signY); drawHand(signX, signY + 66, pal); }
 
@@ -166,7 +183,7 @@ bool draw(uint32_t t) {
 
   spr.setTextColor(TFT_BLACK);
   spr.setTextDatum(BC_DATUM);
-  spr.drawString(label, w / 2, h - 8, 4);
+  if (state != OFFLINE) spr.drawString(label, w / 2, h - 8, 4);  // hors ligne : la prise débranchée suffit
   spr.pushSprite(0, 0);
   return state == DND && dt < 1500;
 }

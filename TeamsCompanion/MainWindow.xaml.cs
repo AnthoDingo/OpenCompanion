@@ -20,6 +20,8 @@ public record Companion(string Name, BitmapSource Image, Version MinFirmware)
 public partial class MainWindow : FluentWindow
 {
     readonly DispatcherTimer refresh = new() { Interval = TimeSpan.FromSeconds(1) };
+    FirmwareUpdate.Release? latest;  // dernière release du repo
+    string? installing;              // étape en cours de la mise à jour du firmware
 
     public MainWindow()
     {
@@ -36,6 +38,7 @@ public partial class MainWindow : FluentWindow
         // L'appli détecte l'écran en tâche de fond ; la fenêtre affiche juste son état.
         refresh.Tick += (_, _) => ShowDevice();
         refresh.Start();
+        _ = CheckUpdateAsync();
         Closed += (_, _) => refresh.Stop();
         ShowDevice();
     }
@@ -43,6 +46,13 @@ public partial class MainWindow : FluentWindow
     void ShowDevice()
     {
         var link = ((App)Application.Current).Link;
+        if (installing != null)
+        {
+            (Device.Severity, Device.Title, Device.Message) = (InfoBarSeverity.Informational, "Mise à jour du firmware", installing);
+            UpdateButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+
         var expected = CompanionLink.ExpectedFirmware;
         (Device.Severity, Device.Title, Device.Message) = link.Firmware switch
         {
@@ -51,7 +61,39 @@ public partial class MainWindow : FluentWindow
             var v when v > expected => (InfoBarSeverity.Warning, "Écran détecté", $"Firmware {v} plus récent que l'application ({expected})."),
             var v => (InfoBarSeverity.Success, "Écran connecté", $"Firmware {v} à jour."),
         };
+        var update = latest != null && link.Firmware is { } fw && latest.Version > fw;
+        if (update) Device.Message += $" Firmware {latest!.Version} disponible.";
+        UpdateButton.Visibility = update ? Visibility.Visible : Visibility.Collapsed;
+        UpdateButton.Content = $"Installer le firmware {latest?.Version}";
         ShowCompanions(link.Firmware);
+    }
+
+    async Task CheckUpdateAsync()
+    {
+        try { latest = await FirmwareUpdate.LatestAsync(); }
+        catch (Exception e) when (e is System.Net.Http.HttpRequestException or System.Text.Json.JsonException or KeyNotFoundException) { latest = null; }  // hors ligne, repo privé, pas de release
+        ShowDevice();
+    }
+
+    async void Update_Click(object sender, RoutedEventArgs e)
+    {
+        if (latest is not { } release) return;
+        installing = "Préparation…";
+        ShowDevice();
+        var progress = new Progress<string>(step => { installing = step; ShowDevice(); });
+        try
+        {
+            await Task.Run(() => FirmwareUpdate.InstallAsync(release, progress));
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "Mise à jour du firmware", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+        finally
+        {
+            installing = null;
+            ShowDevice();
+        }
     }
 
     void Detection_Checked(object sender, RoutedEventArgs e)
@@ -62,7 +104,8 @@ public partial class MainWindow : FluentWindow
 
     void Lang_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (LangBox?.SelectedValue is string code) ((App)Application.Current).Lang = code;
+        if (LangBox?.SelectedValue is not string code) return;
+        ((App)Application.Current).Lang = code;
     }
 
     // Grise les compagnons que le firmware branché ne connaît pas encore.

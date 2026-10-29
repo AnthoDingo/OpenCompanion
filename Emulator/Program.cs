@@ -22,7 +22,7 @@ static class Program
         ["VIDEO"] = new(["call1", "call2", "call1", "call2", "call2", "call1"], 180, 0xFF8C00, "En visio"),
         ["BUSY"] = new(["idle", "idle", "look", "look", "idle", "blink"], 300, 0xC4314B, "Occupe"),
         ["DND"] = new(["idle", "idle", "look", "look", "idle", "blink"], 300, 0xC4314B, "Ne pas deranger"),
-        ["OFFLINE"] = new(["offline"], 1000, 0x8A8886, "Hors ligne"),
+        ["OFFLINE"] = new(["offline"], 1000, 0x8A8886, ""),  // pas de texte, comme main.cpp
     };
 
     // Corps des PNG (vert) -> violet Teams, comme pal[2..4] dans main.cpp.
@@ -89,6 +89,7 @@ static class Program
         double baseY = startY + (lowY - startY) * u;
         int signY = (int)(baseY - (baseY - 70) * s + 15 * Math.Sin(2 * Math.PI * u) + bob);
         if (state == "DND" && !signFront) { DrawStop(g, signX, signY); DrawHand(g, signX, signY + 66); }
+        if (state == "OFFLINE") DrawPlug(g, ox, oy);
         var px = Frames[f];
         for (int y = 0; y < 32; y++)
             for (int x = 0; x < 32; x++)
@@ -130,6 +131,22 @@ static class Program
         g.DrawString("STOP", LabelFont, B(Color.White), cx - size.Width / 2, cy - size.Height / 2);
     }
 
+    // Comme drawPlug() de main.cpp : câble + prise débranchée, derrière le compagnon OFFLINE.
+    static void DrawPlug(Graphics g, int ox, int oy)
+    {
+        float x0 = ox + 25 * Scale, y0 = oy + 26 * Scale, x1 = ox + 25 * Scale, y1 = oy + 36 * Scale,
+              x2 = ox + 28 * Scale, y2 = oy + 33 * Scale;
+        for (int i = 0; i <= 24; i++)
+        {
+            float k = i / 24f, a = (1 - k) * (1 - k), b = 2 * k * (1 - k), c = k * k;
+            g.FillEllipse(B(Color.Black), (int)(a * x0 + b * x1 + c * x2) - 3, (int)(a * y0 + b * y1 + c * y2) - 3, 7, 7);
+        }
+        int px = (int)x2, py = (int)y2;
+        g.FillRectangle(B(Q(0x444444)), px - 2, py - 9, 20, 18);
+        g.FillRectangle(B(Q(0xD3D3D3)), px + 18, py - 6, 9, 4);
+        g.FillRectangle(B(Q(0xD3D3D3)), px + 18, py + 2, 9, 4);
+    }
+
     // Comme drawHand() de main.cpp : contour (SPR_PALETTE[1]), corps, reflet.
     static void DrawHand(Graphics g, int x, int y)
     {
@@ -160,7 +177,7 @@ class EmulatorForm : Form
     const int Zoom = 2;
     readonly Bitmap screen = new(Program.W, Program.H);
     readonly Stopwatch clock = Stopwatch.StartNew();
-    string state = "AVAILABLE";
+    string state = "OFFLINE";  // comme l'ESP au démarrage, avant le premier message du PC
     long since;
 
     public EmulatorForm()

@@ -16,7 +16,7 @@ L'application Windows (`TeamsCompanion/`) déduit le statut localement, puis l'e
 | Aucune activité clavier/souris depuis 5 min | `AWAY`        | jaune           |
 | Sinon                                       | `AVAILABLE`   | vert            |
 
-Le statut est renvoyé toutes les 10 s. Sans message pendant 35 s (PC en veille, câble débranché), l'ESP32 affiche « Hors ligne ».
+Le statut est renvoyé toutes les 10 s. Sans message pendant 35 s (PC en veille, câble débranché), l'ESP32 passe hors ligne : fond gris et prise débranchée, sans texte.
 
 **Limite :** en détection locale, les statuts choisis à la main dans Teams (Occupé, Ne pas déranger…) ne sont connus que des serveurs Microsoft. Pour les récupérer, voir le **mode Graph** ci-dessous.
 
@@ -32,7 +32,7 @@ Le statut est renvoyé toutes les 10 s. Sans message pendant 35 s (PC en veille,
 
 Le menu **Langue de l'écran** de la fenêtre change la langue des libellés affichés sur l'ESP (fr, en, de, es, it, pt). L'application envoie le texte traduit avec le statut (`STATUT|Libellé`) : le changement est immédiat, **sans reflasher**, et le choix est mémorisé.
 
-Le firmware embarque aussi une langue par défaut (`-D FW_LANG`, voir `esp32/platformio.ini`), utilisée seulement en autonome, sans l'application. Les traductions de l'app (`Localize`) et celles du firmware (`esp32/src/lang/*.h`) doivent rester en phase. La police de l'écran est sans accents (« Occupe », « Ne pas deranger »).
+Sans l'application (moniteur série), le firmware affiche ses libellés par défaut, en français. Les traductions se trouvent uniquement dans `Localize` (`TeamsCompanion/Companion.cs`). La police de l'écran est sans accents (« Occupe », « Ne pas deranger »).
 
 ## Composants
 
@@ -83,6 +83,12 @@ dotnet run
 L'application démarre dans la zone de notification. Son icône prend la couleur du statut, et son info-bulle affiche le statut et indique si l'écran est branché. Clic droit pour **Ouvrir** ou **Quitter**.
 
 L'application attend que l'écran soit branché et se reconnecte toute seule s'il est débranché. Une seule instance peut tourner à la fois. `dotnet run -- --test` lance l'auto-test.
+
+### Mise à jour du firmware depuis l'application
+
+Quand une release plus récente que le firmware branché existe sur le repo GitHub, la carte **Écran** de la fenêtre affiche un bouton **Installer le firmware X.Y**. L'application télécharge `firmware.bin` et esptool (l'outil officiel d'Espressif, téléchargé une seule fois dans `%LOCALAPPDATA%\OpenCompanion`). Elle redémarre ensuite l'écran en mode téléchargement, sans toucher au bouton BOOT, puis le flashe.
+
+Pour publier une release, mettez à jour `FW_VERSION` dans `esp32/src/main.cpp` (`0x0130` pour 1.3), puis poussez le tag correspondant : `git tag v1.3 && git push origin v1.3`. Le workflow `firmware` crée la release avec un seul binaire : la langue de l'écran vient de l'application, pas du firmware. L'application lit les releases sans authentification, donc le repo doit être public.
 
 Pour un lancement au démarrage de Windows :
 

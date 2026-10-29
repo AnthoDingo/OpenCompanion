@@ -67,6 +67,7 @@ public partial class App : Application
             GraphPresence.SelfTest();
             TeamsLog.SelfTest();
             Localize.SelfTest();
+            FirmwareUpdate.SelfTest();
             Shutdown();
             return;
         }

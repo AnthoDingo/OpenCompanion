@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
+using System.IO.Ports;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
@@ -247,8 +249,8 @@ static class GraphPresence
 }
 
 // Libellés affichés à l'écran, par langue. Envoyés à l'ESP (format "STATUT|Libellé") et repris dans l'info-bulle.
-// ponytail: miroir de esp32/src/lang/*.h (mêmes textes ASCII calibrés pour la police 4 de l'écran) ;
-//           garder les deux en phase, comme la fonction draw() (voir README).
+// ponytail: textes ASCII calibrés pour la police 4 de l'écran (sans accents) ; le français est aussi
+//           le libellé par défaut du firmware (TXT_* de esp32/src/main.cpp), à garder en phase.
 public record Language(string Code, string Name);
 
 static class Localize
@@ -293,7 +295,10 @@ sealed class CompanionLink : IDisposable
     HidStream? hid;
 
     public bool Connected => hid != null;
-    public Version? Firmware => hid?.Device.ReleaseNumber;
+    // bcdDevice USB 0xJJMN = JJ.M.N ; HidSharp.ReleaseNumber lirait 0x0120 comme 1.20, d'où le décodage ici.
+    public Version? Firmware => hid?.Device.ReleaseNumberBcd is int bcd ? FromBcd(bcd) : null;
+
+    public static Version FromBcd(int bcd) => new((bcd >> 12) * 10 + ((bcd >> 8) & 0xF), (bcd >> 4) & 0xF);
 
     public bool Send(string status)
     {
@@ -335,5 +340,116 @@ sealed class CompanionLink : IDisposable
         buf[0] = d.GetReportDescriptor().OutputReports.First().ReportID;
         Encoding.ASCII.GetBytes(status + "\n").CopyTo(buf, 1);
         return buf;
+    }
+}
+
+// Mise à jour du firmware depuis les releases GitHub du repo firmware dédié (publiées sur un tag vX.Y) :
+// firmware.bin, un seul pour toutes les langues (libellé envoyé par l'appli), écrit par esptool (exe officiel Espressif, téléchargé une fois).
+// Aucun support côté firmware : ouvrir son port série à 1200 bauds le redémarre en mode téléchargement
+// (core Arduino, comme l'IDE), puis il revient sous un port USB-Serial/JTAG.
+// ponytail: repo public requis (API GitHub anonyme) ; un seul ESP Espressif branché à la fois.
+static class FirmwareUpdate
+{
+    const string Repo = "AnthoDingo/OpenCompanion-Firmware";
+    const string EsptoolZip = "https://github.com/espressif/esptool/releases/download/v4.8.1/esptool-v4.8.1-win64.zip";
+    static readonly string Dir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenCompanion");
+    static readonly HttpClient Http = new() { DefaultRequestHeaders = { { "User-Agent", "OpenCompanion" } } };
+
+    public record Release(Version Version, string Url);
+
+    // Dernière release qui contient firmware.bin ; null sinon.
+    public static async Task<Release?> LatestAsync()
+    {
+        using var doc = JsonDocument.Parse(await Http.GetStringAsync($"https://api.github.com/repos/{Repo}/releases/latest"));
+        var root = doc.RootElement;
+        if (ParseTag(root.GetProperty("tag_name").GetString()) is not { } version) return null;
+        foreach (var asset in root.GetProperty("assets").EnumerateArray())
+            if (asset.GetProperty("name").GetString() == "firmware.bin")
+                return new(version, asset.GetProperty("browser_download_url").GetString()!);
+        return null;
+    }
+
+    // "v1.3" -> 1.3, comparable à CompanionLink.Firmware (FW_VERSION 0x0130).
+    public static Version? ParseTag(string? tag) =>
+        Version.TryParse(tag?.TrimStart('v'), out var v) ? new Version(v.Major, Math.Max(v.Minor, 0)) : null;
+
+    public static async Task InstallAsync(Release release, IProgress<string> progress)
+    {
+        progress.Report($"Téléchargement du firmware {release.Version}…");
+        Directory.CreateDirectory(Dir);
+        var bin = Path.Combine(Dir, "firmware.bin");
+        await File.WriteAllBytesAsync(bin, await Http.GetByteArrayAsync(release.Url));
+        var esptool = await EsptoolAsync();
+
+        progress.Report("Redémarrage de l'écran en mode téléchargement…");
+        var port = EspPorts().FirstOrDefault() ?? throw new InvalidOperationException("Port série de l'écran introuvable.");
+        using (var touch = new SerialPort(port, 1200)) touch.Open();
+        port = await WaitBootloaderAsync(port);
+
+        progress.Report($"Écriture du firmware {release.Version} ({port}), ne débranchez pas l'écran…");
+        // Seulement l'application (partition app0) : bootloader et table de partitions restent ceux du premier flash.
+        var psi = new ProcessStartInfo(esptool,
+            $"--chip esp32s3 --port {port} --before no_reset --after hard_reset write_flash 0x10000 \"{bin}\"")
+        { CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        using var p = Process.Start(psi)!;
+        var stdout = p.StandardOutput.ReadToEndAsync();
+        var stderr = p.StandardError.ReadToEndAsync();
+        await p.WaitForExitAsync();
+        if (p.ExitCode != 0)
+            throw new InvalidOperationException($"esptool a échoué : {(await stderr + await stdout).Trim().Split('\n').Last()}");
+    }
+
+    static async Task<string> EsptoolAsync()
+    {
+        var dir = Path.Combine(Dir, "esptool");
+        string? Find() => Directory.Exists(dir) ? Directory.GetFiles(dir, "esptool.exe", SearchOption.AllDirectories).FirstOrDefault() : null;
+        if (Find() is { } exe) return exe;
+        ZipFile.ExtractToDirectory(await Http.GetStreamAsync(EsptoolZip), dir, overwriteFiles: true);
+        return Find() ?? throw new InvalidOperationException("esptool.exe absent de l'archive.");
+    }
+
+    // Le port disparaît au redémarrage puis revient (souvent sous le même nom) une fois en mode téléchargement.
+    static async Task<string> WaitBootloaderAsync(string port)
+    {
+        for (int i = 0; i < 30 && EspPorts().Contains(port); i++) await Task.Delay(100);
+        for (int i = 0; i < 150; i++)
+        {
+            if (EspPorts().FirstOrDefault() is { } boot)
+            {
+                await Task.Delay(500);  // laisse le pilote finir d'ouvrir le port
+                return boot;
+            }
+            await Task.Delay(100);
+        }
+        throw new TimeoutException("L'écran n'est pas revenu en mode téléchargement. Rebranchez-le en maintenant BOOT, puis réessayez.");
+    }
+
+    // Ports COM présents des périphériques Espressif (VID 303A) : firmware Arduino comme bootloader ROM.
+    static IEnumerable<string> EspPorts()
+    {
+        var present = SerialPort.GetPortNames();
+        using var usb = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Enum\USB");
+        foreach (var dev in usb?.GetSubKeyNames() ?? [])
+        {
+            if (!dev.StartsWith("VID_303A", StringComparison.OrdinalIgnoreCase)) continue;
+            using var devKey = usb!.OpenSubKey(dev);
+            foreach (var inst in devKey?.GetSubKeyNames() ?? [])
+            {
+                using var param = devKey!.OpenSubKey($@"{inst}\Device Parameters");
+                if (param?.GetValue("PortName") is string name && present.Contains(name)) yield return name;
+            }
+        }
+    }
+
+    public static void SelfTest()
+    {
+        Trace.Assert(ParseTag("v1.3") == new Version(1, 3));
+        Trace.Assert(ParseTag("1.2") == new Version(1, 2));
+        Trace.Assert(ParseTag("v2") == null);  // Version.TryParse refuse un seul composant
+        Trace.Assert(ParseTag("nightly") == null);
+        Trace.Assert(CompanionLink.FromBcd(0x0120) == new Version(1, 2));
+        Trace.Assert(CompanionLink.FromBcd(0x1031) == new Version(10, 3));
+        Trace.Assert(ParseTag("v1.3") > CompanionLink.FromBcd(0x0120));
     }
 }
