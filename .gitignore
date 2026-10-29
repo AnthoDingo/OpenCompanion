@@ -1,0 +1,13 @@
+# .NET
+bin/
+obj/
+*.user
+
+# Visual Studio
+.vs/
+
+# PlatformIO
+.pio/
+
+# MSAL token cache (jamais versionné)
+token.bin

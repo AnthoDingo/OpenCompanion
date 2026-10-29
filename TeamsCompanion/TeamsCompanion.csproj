@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- uniquement pour NotifyIcon (icône de la zone de notification), absent de WPF -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- évite les conflits de noms WPF / WinForms (Application, Color...) -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="..\esp32\sprites\*.png" Link="sprites\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="HidSharp" Version="2.6.4" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+    <!-- mode Graph : connexion Teams via Microsoft Graph (client public MS, scope Presence.Read) -->
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.66.2" />
+  </ItemGroup>
+
+</Project>

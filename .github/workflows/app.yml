@@ -1,0 +1,28 @@
+name: app
+
+on:
+  push:
+    paths:
+      - 'TeamsCompanion/**'
+      - 'Emulator/**'
+      - '.github/workflows/app.yml'
+  pull_request:
+    paths:
+      - 'TeamsCompanion/**'
+      - 'Emulator/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+      - run: dotnet run --project TeamsCompanion -- --test
+      - run: dotnet publish TeamsCompanion -c Release -o publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TeamsCompanion
+          path: publish

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Emulator/Emulator.csproj" />
+  <Project Path="TeamsCompanion/TeamsCompanion.csproj" />
+</Solution>
