@@ -26,11 +26,12 @@ Le statut est renvoyé toutes les 10 s. Sans message pendant 35 s (PC en veille,
 
 - Pas besoin d'être admin ni d'enregistrer une application : l'app emprunte un client public Microsoft et demande le scope `Presence.Read`, qui se consent soi-même.
 - À la première exécution, une fenêtre affiche un lien et un code : connectez-vous avec votre compte Teams et cliquez « Accepter ». Le jeton est ensuite mis en cache (chiffré par Windows), sans reconnexion aux lancements suivants.
-- Occupé s'affiche en rouge (`BUSY`) ; Ne pas déranger (`DND`) aussi, et le compagnon brandit un panneau STOP. Un appel en cours reste prioritaire (`CALL` / `VIDEO`).
+- Occupé s'affiche en rouge (`BUSY`) ; Ne pas déranger (`DND`) aussi, et le compagnon tourne le dos. Un appel en cours reste prioritaire (`CALL` / `VIDEO`).
+- Je reviens tout de suite (`BRB`) : fond jaune, le compagnon sort de l'écran et laisse un sablier ; il repasse une tête par le bord de temps en temps.
 
-### Langue de l'écran
+### Langue
 
-Le menu **Langue de l'écran** de la fenêtre change la langue des libellés affichés sur l'ESP (fr, en, de, es, it, pt). L'application envoie le texte traduit avec le statut (`STATUT|Libellé`) : le changement est immédiat, **sans reflasher**, et le choix est mémorisé.
+Le menu **Langue** de la page **Paramètres** change la langue de l'application et celle des libellés affichés sur l'ESP (fr, en, de, es, it, pt). L'application envoie le texte traduit avec le statut (`STATUT|Libellé`) : le changement est immédiat, **sans reflasher**, et le choix est mémorisé.
 
 Sans l'application (moniteur série), le firmware affiche ses libellés par défaut, en français. Les traductions se trouvent uniquement dans `Localize` (`TeamsCompanion/Companion.cs`). La police de l'écran est sans accents (« Occupe », « Ne pas deranger »).
 
@@ -65,7 +66,15 @@ Le firmware est dans un dépôt séparé : [OpenCompanion-Firmware](https://gith
 
 ### Application Windows
 
-Prérequis : [.NET 10](https://dotnet.microsoft.com/download) et la nouvelle version de Teams.
+Prérequis : la nouvelle version de Teams.
+
+Téléchargez `OpenCompanion-Setup.exe` depuis les [releases](https://github.com/AnthoDingo/OpenCompanion/releases) et lancez-le. L'installation se fait pour l'utilisateur courant, sans droits administrateur, et n'a pas besoin de .NET (le runtime est inclus). Une case, cochée par défaut, lance OpenCompanion au démarrage de Windows. Une nouvelle version s'installe par-dessus l'ancienne, qu'il faut quitter avant. La désinstallation (Paramètres > Applications) supprime aussi les réglages, le jeton Microsoft Graph et esptool.
+
+L'application vérifie au démarrage, puis toutes les 6 heures, s'il existe une nouvelle version de l'application ou du firmware, et l'annonce par une notification Windows (une fois par version). Pour l'application, le bouton **Télécharger et installer** de la page **Paramètres** télécharge l'installeur, vérifie sa signature (ECDSA, même clé que les firmwares), l'installe et relance l'application. Rien n'est installé sans ce clic, ni si la signature est invalide.
+
+L'installeur n'a pas de signature Authenticode : au premier lancement, Windows SmartScreen affiche « Windows a protégé votre ordinateur ». Cliquez sur **Informations complémentaires**, puis **Exécuter quand même**.
+
+Pour lancer l'application depuis les sources (prérequis : [.NET 10](https://dotnet.microsoft.com/download)) :
 
 ```
 cd TeamsCompanion
@@ -78,18 +87,26 @@ L'application attend que l'écran soit branché et se reconnecte toute seule s'i
 
 ### Mise à jour du firmware depuis l'application
 
-Quand une release plus récente que le firmware branché existe sur le repo GitHub, la carte **Écran** de la fenêtre affiche un bouton **Installer le firmware X.Y**. L'application télécharge `firmware.bin` et esptool (l'outil officiel d'Espressif, téléchargé une seule fois dans `%LOCALAPPDATA%\OpenCompanion`). Elle redémarre ensuite l'écran en mode téléchargement, sans toucher au bouton BOOT, puis le flashe.
+Quand une release plus récente que le firmware branché existe sur le repo GitHub, la carte **Mise à jour du firmware** de la page **Paramètres** affiche un bouton **Installer le firmware X.Y**. L'application télécharge `firmware.bin` et esptool (l'outil officiel d'Espressif, téléchargé une seule fois dans `%LOCALAPPDATA%\OpenCompanion`). Elle redémarre ensuite l'écran en mode téléchargement, sans toucher au bouton BOOT, puis le flashe.
 
-Pour publier une release, dans le dépôt firmware, mettez à jour `FW_VERSION` dans `src/main.cpp` (`0x0130` pour 1.3), puis poussez le tag correspondant : `git tag v1.3 && git push origin v1.3`. Son workflow `firmware` crée la release avec un seul binaire : la langue de l'écran vient de l'application, pas du firmware. L'application lit les releases sans authentification, donc le dépôt firmware doit être public.
+Pour installer un firmware compilé soi-même, le bouton **Installer depuis un fichier…** (visible dès que l'écran est branché) accepte le `firmware.bin` de l'application produit par PlatformIO (`.pio/build/<env>/firmware.bin`). L'application refuse tout fichier qui n'est pas une application ESP32-S3, ainsi que les images fusionnées (bootloader + partitions), qu'elle écraserait au mauvais endroit.
 
-Pour un lancement au démarrage de Windows :
+Pour publier une release, dans le dépôt firmware, mettez à jour `FW_VERSION` dans `src/main.cpp` (`0x0110` pour 1.1), puis poussez le tag correspondant : `git tag v1.1 && git push origin v1.1`. Son workflow `firmware` crée la release avec un seul binaire : la langue de l'écran vient de l'application, pas du firmware. L'application lit les releases sans authentification, donc le dépôt firmware doit être public.
 
-1. Publiez l'application avec `dotnet publish -c Release`.
-2. Placez un raccourci vers `TeamsCompanion.exe` dans `shell:startup`.
+Pour publier une release de l'application, poussez un tag `vX.Y.Z` sur ce dépôt : `git tag v1.6.0 && git push origin v1.6.0`. Le workflow `app` publie l'application en version autonome, compile l'installeur (`TeamsCompanion/installer.iss`, Inno Setup), le signe avec le secret `APP_SIGNING_KEY` (la clé privée `signing.pem` du dépôt firmware) et joint `OpenCompanion-Setup.exe`, `OpenCompanion-Setup.exe.sig` et `TeamsCompanion.zip` à la release. Sans ce secret, le workflow échoue sur un tag. Pour compiler l'installeur en local :
+
+```
+dotnet publish TeamsCompanion -c Release -r win-x64 --self-contained -o publish
+iscc /DAppVersion=1.6.0 TeamsCompanion\installer.iss
+```
+
+Il est produit dans `publish-installer\`.
 
 ## Modifier le compagnon
 
-Les sprites sont des PNG 32×32 dans `sprites/`, affichés 6 fois plus grands. Ils se retouchent avec n'importe quel éditeur pixel art (Aseprite, Piskel…), en gardant :
+Cinq compagnons au choix dans la page **Compagnons** de l'application (menu de gauche) : **Pousse**, **Chouette**, **Magicien**, **Trombone** et **Calculatrice**. Le choix est mémorisé et envoyé à l'écran avec le statut (`STATUT|Libellé|N`).
+
+Les sprites sont des PNG 32×32 dans `sprites/<compagnon>/`, affichés 6 fois plus grands. Chaque compagnon a les mêmes frames (`idle`, `look`, `blink`, `squash`, `jump`, `away1`, `away2`, `call1`, `call2`, `offline`). Ils se retouchent avec n'importe quel éditeur pixel art (Aseprite, Piskel…), en gardant :
 
 - un fond transparent ;
 - uniquement les couleurs de la palette définie dans `png2h.py`.
@@ -100,11 +117,13 @@ Après modification, régénérez `sprites/sprites.h`, puis recopiez-le dans `sr
 python sprites/png2h.py
 ```
 
-Un nouveau fichier `wave.png` devient la frame `F_WAVE`, à ajouter dans une séquence `A_*` de `src/main.cpp` du dépôt firmware. Les couleurs du corps et des fonds se règlent dans la fonction `draw()` du même fichier.
+Pour un nouveau compagnon : créez son dossier avec les mêmes frames, ajoutez-le **à la fin** de `COMPANIONS` dans `png2h.py`, dans la liste `All` de `CompanionsPage.xaml.cs` et dans `Companions` de l'émulateur. La frame `back.png` le montre de dos (Ne pas déranger).
+
+Un nouveau fichier `wave.png` (à créer pour chaque compagnon) devient la frame `F_WAVE`, à ajouter dans une séquence `A_*` de `src/main.cpp` du dépôt firmware. Les couleurs du corps et des fonds se règlent dans la fonction `draw()` du même fichier.
 
 ## Émulateur
 
-`Emulator/` affiche l'écran de l'ESP dans une fenêtre Windows, avec un bouton par statut. Il permet de tester sprites, couleurs et animations sans la carte.
+`Emulator/` affiche l'écran de l'ESP dans une fenêtre Windows, avec un bouton par statut et une liste pour choisir le compagnon. Il permet de tester sprites, couleurs et animations sans la carte.
 
 ```
 dotnet run --project Emulator

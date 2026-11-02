@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -14,11 +15,13 @@ public partial class App : Application
     {
         ["AVAILABLE"] = 0x6BB700,
         ["AWAY"] = 0xFCD116,
+        ["BRB"] = 0xFCD116,
         ["CALL"] = 0xFF8C00,
         ["VIDEO"] = 0xFF8C00,
         ["BUSY"] = 0xC4314B,
         ["DND"] = 0xC4314B,
         ["OFFLINE"] = 0x8A8886,
+        ["UPDATE"] = 0x3A5078,
     };
 
     readonly CompanionLink link = new();
@@ -45,7 +48,7 @@ public partial class App : Application
 
     string lang = Registry.CurrentUser.OpenSubKey(@"Software\OpenCompanion")?.GetValue("Lang") as string ?? "fr";
 
-    // Langue de l'écran, choisie dans la fenêtre : persistée et renvoyée aussitôt à l'ESP.
+    // Langue de l'appli et de l'écran, choisie dans les paramètres : persistée, appliquée à la fenêtre et renvoyée aussitôt à l'ESP.
     internal string Lang
     {
         get => lang;
@@ -53,10 +56,60 @@ public partial class App : Application
         {
             lang = value;
             Registry.CurrentUser.CreateSubKey(@"Software\OpenCompanion").SetValue("Lang", value);
+            ApplyLang();
             sent = "";  // force le renvoi au prochain Tick pour voir le changement tout de suite
         }
     }
+    Forms.ToolStripItem? openItem, quitItem;
+
+    void ApplyLang()
+    {
+        Localize.Lang = lang;
+        Tr.I.Refresh();
+        if (openItem != null) (openItem.Text, quitItem!.Text) = (Localize.T("TrayOpen"), Localize.T("TrayQuit"));
+    }
+    int companion = Registry.CurrentUser.OpenSubKey(@"Software\OpenCompanion")?.GetValue("Companion") as int? ?? 0;
+
+    // Compagnon choisi dans la fenêtre (index de COMPANIONS dans png2h.py) : persisté et renvoyé aussitôt.
+    internal int Companion
+    {
+        get => companion;
+        set
+        {
+            companion = value;
+            Registry.CurrentUser.CreateSubKey(@"Software\OpenCompanion").SetValue("Companion", value);
+            sent = "";
+        }
+    }
+    bool updating;
+
+    // Étape en cours de la mise à jour du firmware (null : aucune), affichée par la page Paramètres.
+    // Dans App et pas dans la page : la page est recréée à chaque navigation, l'installation continue.
+    internal string? FirmwareStep { get; set; }
+
+    // Mise à jour du firmware en cours : l'écran montre le compagnon qui télécharge du code,
+    // jusqu'au redémarrage en mode téléchargement. Appelé depuis le thread UI (fenêtre).
+    internal bool Updating
+    {
+        set
+        {
+            updating = value;
+            sent = "";
+            Tick();  // tout de suite, l'écran va bientôt redémarrer
+        }
+    }
     DateTime lastSent;
+
+    // Dernière release du firmware sur GitHub (null : pas encore lue, hors ligne ou aucune release). Lue par la fenêtre.
+    internal FirmwareUpdate.Release? LatestFirmware { get; private set; }
+
+    // Dernière release de l'appli plus récente que celle qui tourne (null sinon) : la fenêtre propose de l'installer.
+    internal AppUpdate.Release? NewApp { get; private set; }
+    bool installingApp;  // installeur en cours de téléchargement : pas de deuxième clic en parallèle
+
+    // Versions déjà annoncées par notification : une seule notification par version, même après redémarrage.
+    string? notifiedFirmware = Registry.CurrentUser.OpenSubKey(@"Software\OpenCompanion")?.GetValue("NotifiedFirmware") as string;
+    string? notifiedApp = Registry.CurrentUser.OpenSubKey(@"Software\OpenCompanion")?.GetValue("NotifiedApp") as string;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -68,6 +121,8 @@ public partial class App : Application
             TeamsLog.SelfTest();
             Localize.SelfTest();
             FirmwareUpdate.SelfTest();
+            AppUpdate.SelfTest();
+            CompanionLink.SelfTest();
             Shutdown();
             return;
         }
@@ -83,34 +138,91 @@ public partial class App : Application
         if (e.Args.Contains("--graph")) UseGraph = true;
 
         var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add("Ouvrir", null, (_, _) => ShowWindow());
-        menu.Items.Add("Quitter", null, (_, _) => Shutdown());
+        openItem = menu.Items.Add("", null, (_, _) => ShowWindow());
+        quitItem = menu.Items.Add("", null, (_, _) => Shutdown());
+        ApplyLang();
         tray = new Forms.NotifyIcon { Icon = icons["OFFLINE"], Text = "OpenCompanion", ContextMenuStrip = menu, Visible = true };
         tray.DoubleClick += (_, _) => ShowWindow();
+        tray.BalloonTipClicked += (_, _) => ShowWindow(settings: true);  // les paramètres proposent d'installer le firmware ou la nouvelle version
 
         // ponytail: détection + envoi HID sur le thread UI (quelques ms), thread dédié si ça saccade
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         timer.Tick += (_, _) => Tick();
         timer.Start();
         Tick();
+
+        // API GitHub anonyme limitée à 60 requêtes/h : une lecture au démarrage puis toutes les 6 h suffit.
+        var releases = new DispatcherTimer { Interval = TimeSpan.FromHours(6) };
+        releases.Tick += (_, _) => _ = CheckReleasesAsync();
+        releases.Start();
+        _ = CheckReleasesAsync();
+    }
+
+    // Hors ligne, repo privé, pas de release : on garde la dernière lue.
+    internal async Task CheckReleasesAsync()
+    {
+        try { LatestFirmware = await FirmwareUpdate.LatestAsync(); }
+        catch (Exception e) when (e is System.Net.Http.HttpRequestException or System.Text.Json.JsonException or KeyNotFoundException) { }
+        try
+        {
+            if (await AppUpdate.LatestAsync() is { } app && app.Version > AppUpdate.Current) NotifyApp(NewApp = app);
+        }
+        catch (Exception e) when (e is System.Net.Http.HttpRequestException or System.Text.Json.JsonException or KeyNotFoundException) { }
+    }
+
+    void NotifyApp(AppUpdate.Release app)
+    {
+        var version = app.Version.ToString();
+        if (version == notifiedApp) return;
+        notifiedApp = version;
+        Registry.CurrentUser.CreateSubKey(@"Software\OpenCompanion").SetValue("NotifiedApp", version);
+        tray!.ShowBalloonTip(10000, Localize.T("NotifyAppTitle"), Localize.T("NotifyApp", version, AppUpdate.Current), Forms.ToolTipIcon.Info);
+    }
+
+    // Bouton de la fenêtre : télécharge, vérifie la signature, installe en silencieux ; l'installeur relance l'appli.
+    // Erreur réseau ou signature invalide : exception pour la fenêtre, rien n'est lancé.
+    internal async Task InstallAppAsync()
+    {
+        if (NewApp is not { } app || installingApp || updating) return;  // pas pendant le flash du firmware
+        installingApp = true;
+        string setup;
+        try { setup = await AppUpdate.DownloadAsync(app); }
+        finally { installingApp = false; }
+
+        // AppMutex de l'installeur = notre Mutex : le libérer, sinon il refuse de continuer en silencieux.
+        single?.ReleaseMutex();
+        single?.Dispose();
+        single = null;
+        // /SILENT : barre de progression seule, cases (démarrage auto…) de l'installation précédente ;
+        // /CLOSEAPPLICATIONS ferme ce processus s'il tient encore ses fichiers ; installer.iss relance l'appli à la fin.
+        Process.Start(setup, "/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS");
+        Shutdown();
+    }
+
+    // Écran branché avec un firmware plus ancien que la dernière release : notification Windows, une fois par version.
+    void NotifyFirmware()
+    {
+        if (updating || LatestFirmware is not { } latest || link.Firmware is not { } current || latest.Version <= current) return;
+        var version = latest.Version.ToString();
+        if (version == notifiedFirmware) return;
+        notifiedFirmware = version;
+        Registry.CurrentUser.CreateSubKey(@"Software\OpenCompanion").SetValue("NotifiedFirmware", version);
+        tray!.ShowBalloonTip(10000, Localize.T("NotifyFirmwareTitle"), Localize.T("NotifyFirmware", version, current), Forms.ToolTipIcon.Info);
     }
 
     void Tick()
     {
-        var status = useGraph ? graph!() : teamsLog.Current();
+        var status = updating ? "UPDATE" : useGraph ? graph!() : teamsLog.Current();
 
         // Renvoi périodique : l'ESP repasse OFFLINE s'il n'entend plus rien (PC en veille, câble débranché).
         if (status != sent || DateTime.Now - lastSent > TimeSpan.FromSeconds(10))
         {
-            // Libellé localisé seulement si le firmware sait l'afficher (>= 1.2) ; sinon statut brut.
-            var wire = link.Firmware is { } fw && fw >= CompanionLink.ExpectedFirmware
-                ? $"{status}|{Localize.Label(lang, status)}"
-                : status;
-            sent = link.Send(wire) ? status : "";
+            sent = link.Send(CompanionLink.Wire(status, Localize.Label(lang, status), companion)) ? status : "";
             lastSent = DateTime.Now;
         }
+        NotifyFirmware();
 
-        var text = $"OpenCompanion – {Localize.Label(lang, status)}" + (link.Connected ? "" : " (écran non branché)");
+        var text = $"OpenCompanion – {Localize.Label(lang, status)}" + (link.Connected ? "" : Localize.T("TrayUnplugged"));
         if (tray!.Text != text)
         {
             tray.Text = text;
@@ -118,13 +230,14 @@ public partial class App : Application
         }
     }
 
-    void ShowWindow()
+    void ShowWindow(bool settings = false)
     {
         if (window == null)
         {
             window = new MainWindow();
             window.Closed += (_, _) => window = null;
         }
+        if (settings) window.ShowSettings();
         window.Show();
         window.Activate();
     }
