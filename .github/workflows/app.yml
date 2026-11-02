@@ -50,7 +50,8 @@ jobs:
           SIGNING_KEY: ${{ secrets.APP_SIGNING_KEY }}
         run: |
           if (-not $env:SIGNING_KEY) { Write-Error "secret APP_SIGNING_KEY manquant"; exit 1 }
-          Set-Content -NoNewline signing.pem $env:SIGNING_KEY
+          # Jamais Set-Content : en erreur, PowerShell affiche la clé comme chemin et le masquage GitHub la rate.
+          [IO.File]::WriteAllText("$PWD\signing.pem", $env:SIGNING_KEY)
           openssl dgst -sha256 -sign signing.pem -out publish-installer/OpenCompanion-Setup.exe.sig publish-installer/OpenCompanion-Setup.exe
           $code = $LASTEXITCODE
           Remove-Item signing.pem
