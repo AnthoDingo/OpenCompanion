@@ -125,7 +125,7 @@ sealed class TeamsLog
         Trace.Assert(Decide(true, true, false, "Available", local) == "CALL");
         Trace.Assert(Decide(true, false, false, "DoNotDisturb", local) == "DND");
         Trace.Assert(Decide(true, true, false, "DoNotDisturb", local) == "CALL");
-        Trace.Assert(Decide(true, false, false, "BeRightBack", local) == "AWAY");
+        Trace.Assert(Decide(true, false, false, "BeRightBack", local) == "BRB");
         Trace.Assert(Decide(true, false, false, "Available", local) == "AVAILABLE");
         Trace.Assert(Decide(true, false, false, null, local) == "AWAY");
         Trace.Assert(Decide(true, false, false, "PresenceUnknown", local) == "AWAY");
@@ -210,7 +210,8 @@ static class GraphPresence
         _ => availability switch
         {
             "Available" or "AvailableIdle" => "AVAILABLE",
-            "Away" or "BeRightBack" => "AWAY",
+            "Away" => "AWAY",
+            "BeRightBack" => "BRB",
             "Busy" or "BusyIdle" => "BUSY",
             "DoNotDisturb" => "DND",
             _ => "OFFLINE",  // Offline, PresenceUnknown
@@ -227,6 +228,7 @@ static class GraphPresence
         Trace.Assert(Map("DoNotDisturb", "DoNotDisturb") == "DND");
         Trace.Assert(Map("Busy", "Busy") == "BUSY");
         Trace.Assert(Map("Away", "Away") == "AWAY");
+        Trace.Assert(Map("BeRightBack", "BeRightBack") == "BRB");
         Trace.Assert(Map("Offline", "Offline") == "OFFLINE");
         Trace.Assert(Map("PresenceUnknown", "") == "OFFLINE");
     }
@@ -263,12 +265,12 @@ static class Localize
 
     static readonly Dictionary<string, Dictionary<string, string>> Labels = new()
     {
-        ["fr"] = new() { ["OFFLINE"] = "Hors ligne", ["AVAILABLE"] = "Disponible", ["AWAY"] = "Absent", ["CALL"] = "En appel", ["VIDEO"] = "En visio", ["BUSY"] = "Occupe", ["DND"] = "Ne pas deranger" },
-        ["en"] = new() { ["OFFLINE"] = "Offline", ["AVAILABLE"] = "Available", ["AWAY"] = "Away", ["CALL"] = "In a call", ["VIDEO"] = "Video call", ["BUSY"] = "Busy", ["DND"] = "Do not disturb" },
-        ["de"] = new() { ["OFFLINE"] = "Offline", ["AVAILABLE"] = "Verfuegbar", ["AWAY"] = "Abwesend", ["CALL"] = "Im Anruf", ["VIDEO"] = "Videoanruf", ["BUSY"] = "Beschaeftigt", ["DND"] = "Nicht stoeren" },
-        ["es"] = new() { ["OFFLINE"] = "Sin conexion", ["AVAILABLE"] = "Disponible", ["AWAY"] = "Ausente", ["CALL"] = "En llamada", ["VIDEO"] = "Videollamada", ["BUSY"] = "Ocupado", ["DND"] = "No molestar" },
-        ["it"] = new() { ["OFFLINE"] = "Offline", ["AVAILABLE"] = "Disponibile", ["AWAY"] = "Assente", ["CALL"] = "In chiamata", ["VIDEO"] = "Videochiamata", ["BUSY"] = "Occupato", ["DND"] = "Non disturbare" },
-        ["pt"] = new() { ["OFFLINE"] = "Offline", ["AVAILABLE"] = "Disponivel", ["AWAY"] = "Ausente", ["CALL"] = "Em chamada", ["VIDEO"] = "Videochamada", ["BUSY"] = "Ocupado", ["DND"] = "Nao incomodar" },
+        ["fr"] = new() { ["OFFLINE"] = "Hors ligne", ["AVAILABLE"] = "Disponible", ["AWAY"] = "Absent", ["BRB"] = "Je reviens vite", ["CALL"] = "En appel", ["VIDEO"] = "En visio", ["BUSY"] = "Occupe", ["DND"] = "Ne pas deranger", ["UPDATE"] = "Mise a jour" },
+        ["en"] = new() { ["OFFLINE"] = "Offline", ["AVAILABLE"] = "Available", ["AWAY"] = "Away", ["BRB"] = "Be right back", ["CALL"] = "In a call", ["VIDEO"] = "Video call", ["BUSY"] = "Busy", ["DND"] = "Do not disturb", ["UPDATE"] = "Updating" },
+        ["de"] = new() { ["OFFLINE"] = "Offline", ["AVAILABLE"] = "Verfuegbar", ["AWAY"] = "Abwesend", ["BRB"] = "Gleich zurueck", ["CALL"] = "Im Anruf", ["VIDEO"] = "Videoanruf", ["BUSY"] = "Beschaeftigt", ["DND"] = "Nicht stoeren", ["UPDATE"] = "Update" },
+        ["es"] = new() { ["OFFLINE"] = "Sin conexion", ["AVAILABLE"] = "Disponible", ["AWAY"] = "Ausente", ["BRB"] = "Ahora vuelvo", ["CALL"] = "En llamada", ["VIDEO"] = "Videollamada", ["BUSY"] = "Ocupado", ["DND"] = "No molestar", ["UPDATE"] = "Actualizando" },
+        ["it"] = new() { ["OFFLINE"] = "Offline", ["AVAILABLE"] = "Disponibile", ["AWAY"] = "Assente", ["BRB"] = "Torno subito", ["CALL"] = "In chiamata", ["VIDEO"] = "Videochiamata", ["BUSY"] = "Occupato", ["DND"] = "Non disturbare", ["UPDATE"] = "Aggiornamento" },
+        ["pt"] = new() { ["OFFLINE"] = "Offline", ["AVAILABLE"] = "Disponivel", ["AWAY"] = "Ausente", ["BRB"] = "Volto ja", ["CALL"] = "Em chamada", ["VIDEO"] = "Videochamada", ["BUSY"] = "Ocupado", ["DND"] = "Nao incomodar", ["UPDATE"] = "Atualizando" },
     };
 
     public static string Label(string lang, string status) =>
@@ -276,7 +278,7 @@ static class Localize
 
     public static void SelfTest()
     {
-        string[] codes = { "OFFLINE", "AVAILABLE", "AWAY", "CALL", "VIDEO", "BUSY", "DND" };
+        string[] codes = { "OFFLINE", "AVAILABLE", "AWAY", "BRB", "CALL", "VIDEO", "BUSY", "DND", "UPDATE" };
         foreach (var l in Languages)
             foreach (var c in codes)
                 Trace.Assert(Labels[l.Code].ContainsKey(c), $"libellé manquant {l.Code}/{c}");
@@ -289,8 +291,16 @@ static class Localize
 sealed class CompanionLink : IDisposable
 {
     // Version attendue du firmware : égale à FW_VERSION de esp32/src/main.cpp (annoncée en bcdDevice USB).
-    // 1.2 = premier firmware qui affiche le libellé localisé envoyé par l'appli (sinon libellé compilé).
-    public static readonly Version ExpectedFirmware = new(1, 2);
+    // Quand une version ajoute un statut ou un compagnon, noter ici « X.Y = premier firmware qui ... ».
+    public static readonly Version ExpectedFirmware = new(1, 0);
+
+    // Ligne envoyée à l'écran : statut, libellé localisé, numéro du compagnon.
+    public static string Wire(string status, string label, int companion) => $"{status}|{label}|{companion}";
+
+    public static void SelfTest()
+    {
+        Trace.Assert(Wire("DND", "Ne pas deranger", 2) == "DND|Ne pas deranger|2");
+    }
 
     HidStream? hid;
 
@@ -327,7 +337,10 @@ sealed class CompanionLink : IDisposable
         {
             try
             {
-                if (d.GetMaxOutputReportLength() > 0 && d.GetProductName() == "OpenCompanion") return d.Open();
+                // Windows peut renvoyer le nom de l'interface HID, fixé à "TinyUSB HID" par le core Arduino, au lieu du produit.
+                // ponytail: tout HID TinyUSB Espressif est pris pour l'écran ; un seul ESP branché à la fois.
+                if (d.GetMaxOutputReportLength() > 0 &&
+                    d.GetProductName() is "OpenCompanion" or "TinyUSB HID" && d.VendorID == 0x303A) return d.Open();
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { } // HID système verrouillés
         }
@@ -345,6 +358,7 @@ sealed class CompanionLink : IDisposable
 
 // Mise à jour du firmware depuis les releases GitHub du repo firmware dédié (publiées sur un tag vX.Y) :
 // firmware.bin, un seul pour toutes les langues (libellé envoyé par l'appli), écrit par esptool (exe officiel Espressif, téléchargé une fois).
+// firmware.bin est signé (ECDSA P-256 / SHA-256) : on vérifie firmware.bin.sig avec SigningPublicKey avant de flasher, sinon on refuse (fail-closed).
 // Aucun support côté firmware : ouvrir son port série à 1200 bauds le redémarre en mode téléchargement
 // (core Arduino, comme l'IDE), puis il revient sous un port USB-Serial/JTAG.
 // ponytail: repo public requis (API GitHub anonyme) ; un seul ESP Espressif branché à la fois.
@@ -352,22 +366,43 @@ static class FirmwareUpdate
 {
     const string Repo = "AnthoDingo/OpenCompanion-Firmware";
     const string EsptoolZip = "https://github.com/espressif/esptool/releases/download/v4.8.1/esptool-v4.8.1-win64.zip";
+
+    // Clé publique ECDSA P-256 (SPKI, base64 DER) de l'auteur, pour vérifier firmware.bin avant de flasher.
+    // La clé privée signe les releases en CI (secret FIRMWARE_SIGNING_KEY du dépôt firmware) et ne quitte jamais
+    // le poste de l'auteur. VIDE = aucune mise à jour release acceptée (fail-closed). Obtenue par
+    // openssl ec -in signing.pem -pubout -outform DER | base64 -w0 (signing.pem : racine du dépôt firmware, ignoré par git).
+    const string SigningPublicKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEpKuZfHhWU2YgqYnp8a+jIY6OQZb/2PfmoGSQqZj0uUzpJrEuyLunWzRqAY10OnpGCDduZF63yILXRB0g4HF1nw==";
+
     static readonly string Dir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenCompanion");
     static readonly HttpClient Http = new() { DefaultRequestHeaders = { { "User-Agent", "OpenCompanion" } } };
 
-    public record Release(Version Version, string Url);
+    public record Release(Version Version, string Url, string SigUrl);
 
-    // Dernière release qui contient firmware.bin ; null sinon.
+    // Dernière release qui contient firmware.bin ET sa signature firmware.bin.sig ; null sinon.
     public static async Task<Release?> LatestAsync()
     {
         using var doc = JsonDocument.Parse(await Http.GetStringAsync($"https://api.github.com/repos/{Repo}/releases/latest"));
         var root = doc.RootElement;
         if (ParseTag(root.GetProperty("tag_name").GetString()) is not { } version) return null;
+        string? bin = null, sig = null;
         foreach (var asset in root.GetProperty("assets").EnumerateArray())
-            if (asset.GetProperty("name").GetString() == "firmware.bin")
-                return new(version, asset.GetProperty("browser_download_url").GetString()!);
-        return null;
+        {
+            var name = asset.GetProperty("name").GetString();
+            var url = asset.GetProperty("browser_download_url").GetString();
+            if (name == "firmware.bin") bin = url;
+            else if (name == "firmware.bin.sig") sig = url;
+        }
+        return bin != null && sig != null ? new Release(version, bin, sig) : null;
+    }
+
+    // Vérifie une signature détachée ECDSA P-256 / SHA-256 au format DER (openssl dgst -sha256 -sign).
+    static bool Verify(byte[] data, byte[] signature, string spkiBase64)
+    {
+        if (spkiBase64.Length == 0) return false;  // clé non configurée : refuser plutôt que flasher à l'aveugle
+        using var ecdsa = ECDsa.Create();
+        ecdsa.ImportSubjectPublicKeyInfo(Convert.FromBase64String(spkiBase64), out _);
+        return ecdsa.VerifyData(data, signature, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
     }
 
     // "v1.3" -> 1.3, comparable à CompanionLink.Firmware (FW_VERSION 0x0130).
@@ -377,17 +412,56 @@ static class FirmwareUpdate
     public static async Task InstallAsync(Release release, IProgress<string> progress)
     {
         progress.Report($"Téléchargement du firmware {release.Version}…");
+        var download = Http.GetByteArrayAsync(release.Url);
+        var signature = Http.GetByteArrayAsync(release.SigUrl);
+        await Task.WhenAll(download, signature, Task.Delay(3000));  // au moins 3 s d'animation sur l'écran avant son redémarrage
+        var image = await download;
+        if (!Verify(image, await signature, SigningPublicKey))
+            throw new InvalidOperationException("Signature du firmware invalide : mise à jour refusée.");
+        await FlashAsync(image, $"firmware {release.Version}", progress);
+    }
+
+    // Fichier choisi par l'utilisateur (déjà validé par Invalid côté fenêtre, revérifié dans FlashAsync).
+    public static async Task InstallFileAsync(byte[] image, string name, IProgress<string> progress)
+    {
+        progress.Report($"Préparation de {name}…");
+        await Task.Delay(3000);  // même animation sur l'écran que pour une release
+        await FlashAsync(image, name, progress);
+    }
+
+    // Partition app0 de la table par défaut (0x10000, 0x330000 octets) : on n'écrit que là.
+    const int AppPartitionSize = 0x330000;
+
+    // Raison de refuser l'image, ou null si c'est bien un firmware d'application ESP32-S3.
+    public static string? Invalid(byte[] image)
+    {
+        if (image.Length < 24 || image[0] != 0xE9)
+            return "Ce fichier n'est pas un firmware ESP32 : choisissez le firmware.bin produit par PlatformIO.";
+        if (BitConverter.ToUInt16(image, 12) != 9)  // chip_id de l'en-tête étendu, 9 = ESP32-S3
+            return "Ce firmware n'a pas été compilé pour un ESP32-S3.";
+        if (image.Length > 0x8002 && image[0x8000] == 0xAA && image[0x8001] == 0x50)
+            return "Image fusionnée (bootloader + partitions + application) : choisissez le firmware.bin de l'application seule (.pio/build/<env>/firmware.bin).";
+        if (image.Length > AppPartitionSize)
+            return $"Firmware trop gros ({image.Length / 1024} Ko, maximum {AppPartitionSize / 1024} Ko).";
+        return null;
+    }
+
+    static async Task FlashAsync(byte[] image, string name, IProgress<string> progress)
+    {
+        if (Invalid(image) is { } why) throw new InvalidOperationException(why);
         Directory.CreateDirectory(Dir);
         var bin = Path.Combine(Dir, "firmware.bin");
-        await File.WriteAllBytesAsync(bin, await Http.GetByteArrayAsync(release.Url));
+        await File.WriteAllBytesAsync(bin, image);
         var esptool = await EsptoolAsync();
 
         progress.Report("Redémarrage de l'écran en mode téléchargement…");
         var port = EspPorts().FirstOrDefault() ?? throw new InvalidOperationException("Port série de l'écran introuvable.");
-        using (var touch = new SerialPort(port, 1200)) touch.Open();
+        // L'ESP redémarre pendant l'ouverture : Windows lève souvent « device not functioning », c'est le signe attendu.
+        try { using var touch = new SerialPort(port, 1200); touch.Open(); }
+        catch (IOException) { }
         port = await WaitBootloaderAsync(port);
 
-        progress.Report($"Écriture du firmware {release.Version} ({port}), ne débranchez pas l'écran…");
+        progress.Report($"Écriture de {name} ({port}), ne débranchez pas l'écran…");
         // Seulement l'application (partition app0) : bootloader et table de partitions restent ceux du premier flash.
         var psi = new ProcessStartInfo(esptool,
             $"--chip esp32s3 --port {port} --before no_reset --after hard_reset write_flash 0x10000 \"{bin}\"")
@@ -451,5 +525,28 @@ static class FirmwareUpdate
         Trace.Assert(CompanionLink.FromBcd(0x0120) == new Version(1, 2));
         Trace.Assert(CompanionLink.FromBcd(0x1031) == new Version(10, 3));
         Trace.Assert(ParseTag("v1.3") > CompanionLink.FromBcd(0x0120));
+
+        var app = new byte[1024];
+        app[0] = 0xE9;
+        app[12] = 9;
+        Trace.Assert(Invalid(app) == null);
+        Trace.Assert(Invalid([0x50, 0x4B, 3, 4]) != null);  // un zip, trop court et mauvais magic
+        app[12] = 0;  // ESP32 classique
+        Trace.Assert(Invalid(app) != null);
+        var merged = new byte[0x9000];
+        merged[0] = 0xE9;
+        merged[12] = 9;
+        merged[0x8000] = 0xAA;
+        merged[0x8001] = 0x50;
+        Trace.Assert(Invalid(merged) != null);
+
+        // Signature ECDSA P-256 produite par openssl (dgst -sha256 -sign), vérifiée par la BCL : clé de TEST, pas de prod.
+        const string testPub = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMbaoHBQgFiGvwFHEefECjvNmPsIQ4ax8IpPHCZeDgWRv1Yyeemtavzel3GBmLXcdtiBL3IXLPYxM30ZEIa8PkQ==";
+        byte[] msg = Encoding.ASCII.GetBytes("firmware-test");
+        byte[] goodSig = Convert.FromBase64String("MEUCIQDzcDM6wmCCvgafAqviUmwnFI0L5U7yNwMkDOtPaoiQtgIgdoY1jxQMafcndO/4bo7sgQD2FaWdFbQW/DQK4qPJLCk=");
+        Trace.Assert(Verify(msg, goodSig, testPub));             // signature valide -> accepté
+        msg[0] ^= 1;
+        Trace.Assert(!Verify(msg, goodSig, testPub));            // firmware altéré -> rejet
+        Trace.Assert(!Verify(Encoding.ASCII.GetBytes("x"), goodSig, ""));  // clé non configurée -> rejet
     }
 }

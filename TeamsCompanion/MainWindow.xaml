@@ -21,7 +21,7 @@
         <ui:Card Grid.Row="1" Margin="16,8,16,0">
             <StackPanel>
                 <ui:TextBlock Text="Compagnons" FontTypography="BodyStrong" Margin="0,0,0,8" />
-                <ui:ListView x:Name="Companions" SelectedIndex="0">
+                <ui:ListView x:Name="Companions" SelectionChanged="Companion_Changed">
                     <ui:ListView.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel />
@@ -82,8 +82,12 @@
             <StackPanel>
                 <ui:TextBlock Text="Écran" FontTypography="BodyStrong" Margin="0,0,0,8" />
                 <ui:InfoBar x:Name="Device" IsOpen="True" IsClosable="False" />
-                <ui:Button x:Name="UpdateButton" Appearance="Primary" Margin="0,8,0,0"
-                           Visibility="Collapsed" Click="Update_Click" />
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <ui:Button x:Name="UpdateButton" Appearance="Primary" Margin="0,0,8,0"
+                               Visibility="Collapsed" Click="Update_Click" />
+                    <ui:Button x:Name="FileButton" Content="Installer depuis un fichier…"
+                               Visibility="Collapsed" Click="File_Click" />
+                </StackPanel>
             </StackPanel>
         </ui:Card>
 

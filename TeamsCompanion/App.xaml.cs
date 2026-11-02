@@ -14,11 +14,13 @@ public partial class App : Application
     {
         ["AVAILABLE"] = 0x6BB700,
         ["AWAY"] = 0xFCD116,
+        ["BRB"] = 0xFCD116,
         ["CALL"] = 0xFF8C00,
         ["VIDEO"] = 0xFF8C00,
         ["BUSY"] = 0xC4314B,
         ["DND"] = 0xC4314B,
         ["OFFLINE"] = 0x8A8886,
+        ["UPDATE"] = 0x3A5078,
     };
 
     readonly CompanionLink link = new();
@@ -56,6 +58,32 @@ public partial class App : Application
             sent = "";  // force le renvoi au prochain Tick pour voir le changement tout de suite
         }
     }
+    int companion = Registry.CurrentUser.OpenSubKey(@"Software\OpenCompanion")?.GetValue("Companion") as int? ?? 0;
+
+    // Compagnon choisi dans la fenêtre (index de COMPANIONS dans png2h.py) : persisté et renvoyé aussitôt.
+    internal int Companion
+    {
+        get => companion;
+        set
+        {
+            companion = value;
+            Registry.CurrentUser.CreateSubKey(@"Software\OpenCompanion").SetValue("Companion", value);
+            sent = "";
+        }
+    }
+    bool updating;
+
+    // Mise à jour du firmware en cours : l'écran montre le compagnon qui télécharge du code,
+    // jusqu'au redémarrage en mode téléchargement. Appelé depuis le thread UI (fenêtre).
+    internal bool Updating
+    {
+        set
+        {
+            updating = value;
+            sent = "";
+            Tick();  // tout de suite, l'écran va bientôt redémarrer
+        }
+    }
     DateTime lastSent;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -68,6 +96,7 @@ public partial class App : Application
             TeamsLog.SelfTest();
             Localize.SelfTest();
             FirmwareUpdate.SelfTest();
+            CompanionLink.SelfTest();
             Shutdown();
             return;
         }
@@ -97,16 +126,12 @@ public partial class App : Application
 
     void Tick()
     {
-        var status = useGraph ? graph!() : teamsLog.Current();
+        var status = updating ? "UPDATE" : useGraph ? graph!() : teamsLog.Current();
 
         // Renvoi périodique : l'ESP repasse OFFLINE s'il n'entend plus rien (PC en veille, câble débranché).
         if (status != sent || DateTime.Now - lastSent > TimeSpan.FromSeconds(10))
         {
-            // Libellé localisé seulement si le firmware sait l'afficher (>= 1.2) ; sinon statut brut.
-            var wire = link.Firmware is { } fw && fw >= CompanionLink.ExpectedFirmware
-                ? $"{status}|{Localize.Label(lang, status)}"
-                : status;
-            sent = link.Send(wire) ? status : "";
+            sent = link.Send(CompanionLink.Wire(status, Localize.Label(lang, status), companion)) ? status : "";
             lastSent = DateTime.Now;
         }
 

@@ -4,8 +4,9 @@ on:
   push:
     paths:
       - 'TeamsCompanion/**'
+      - 'sprites/**'
       - '.github/workflows/app.yml'
-    # tag vX.Y.Z : publie TeamsCompanion.zip dans la release (emulator.yml y ajoute Emulator.zip)
+    # tag vX.Y.Z : publie OpenCompanion-Setup.exe et TeamsCompanion.zip dans la release (emulator.yml y ajoute Emulator.zip)
     tags:
       - 'v*'
   pull_request:
@@ -24,15 +25,30 @@ jobs:
         with:
           dotnet-version: '10.x'
       - run: dotnet run --project TeamsCompanion -- --test
-      - run: dotnet publish TeamsCompanion -c Release -o publish
+      # Version : celle du tag vX.Y.Z, sinon <Version> de TeamsCompanion.csproj.
+      - shell: pwsh
+        run: |
+          $v = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME.TrimStart('v') } else { dotnet msbuild TeamsCompanion -getProperty:Version }
+          "APP_VERSION=$v" >> $env:GITHUB_ENV
+      # Autonome : l'utilisateur n'a pas à installer le runtime .NET. Traductions limitées aux langues de l'appli.
+      - run: dotnet publish TeamsCompanion -c Release -r win-x64 --self-contained -o publish -p:Version=${{ env.APP_VERSION }} "-p:SatelliteResourceLanguages=fr%3Ben%3Bde%3Bes%3Bit%3Bpt"
+      # Installeur compilé à chaque build : une erreur dans installer.iss se voit avant le tag.
+      - shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y }
+          & $iscc /Q "/DAppVersion=$env:APP_VERSION" TeamsCompanion\installer.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
-          name: TeamsCompanion
-          path: publish
+          name: OpenCompanion-Setup
+          path: publish-installer/OpenCompanion-Setup.exe
       - if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: Compress-Archive -Path publish/* -DestinationPath TeamsCompanion.zip
       - if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: TeamsCompanion.zip
+          files: |
+            publish-installer/OpenCompanion-Setup.exe
+            TeamsCompanion.zip

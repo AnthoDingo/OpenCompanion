@@ -11,3 +11,7 @@ obj/
 
 # MSAL token cache (jamais versionné)
 token.bin
+
+# Publication et installeur (CI ou local)
+publish/
+publish-installer/

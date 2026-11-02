@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -27,7 +28,16 @@ public partial class MainWindow : FluentWindow
     {
         InitializeComponent();
         SystemThemeWatcher.Watch(this);  // suit le thème clair/sombre de Windows
-        Companions.ItemsSource = new[] { new Companion("Pousse", Sprite("idle"), new Version(1, 0)) };
+        // Même ordre que COMPANIONS de sprites/png2h.py : l'index est le numéro envoyé à l'écran.
+        Companions.ItemsSource = new[]
+        {
+            new Companion("Pousse", Sprite("pousse/idle"), new Version(1, 0)),
+            new Companion("Chouette", Sprite("chouette/idle"), new Version(1, 0)),
+            new Companion("Magicien", Sprite("magicien/idle"), new Version(1, 0)),
+            new Companion("Trombone", Sprite("trombone/idle"), new Version(1, 0)),
+            new Companion("Calculatrice", Sprite("calculatrice/idle"), new Version(1, 0)),
+        };
+        Companions.SelectedIndex = ((App)Application.Current).Companion;
 
         DetectGraph.IsChecked = ((App)Application.Current).UseGraph;
         DetectClient.IsChecked = !DetectGraph.IsChecked;
@@ -49,7 +59,7 @@ public partial class MainWindow : FluentWindow
         if (installing != null)
         {
             (Device.Severity, Device.Title, Device.Message) = (InfoBarSeverity.Informational, "Mise à jour du firmware", installing);
-            UpdateButton.Visibility = Visibility.Collapsed;
+            UpdateButton.Visibility = FileButton.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -64,6 +74,7 @@ public partial class MainWindow : FluentWindow
         var update = latest != null && link.Firmware is { } fw && latest.Version > fw;
         if (update) Device.Message += $" Firmware {latest!.Version} disponible.";
         UpdateButton.Visibility = update ? Visibility.Visible : Visibility.Collapsed;
+        FileButton.Visibility = link.Firmware != null ? Visibility.Visible : Visibility.Collapsed;
         UpdateButton.Content = $"Installer le firmware {latest?.Version}";
         ShowCompanions(link.Firmware);
     }
@@ -77,13 +88,34 @@ public partial class MainWindow : FluentWindow
 
     async void Update_Click(object sender, RoutedEventArgs e)
     {
-        if (latest is not { } release) return;
+        if (latest is { } release) await InstallAsync(progress => FirmwareUpdate.InstallAsync(release, progress));
+    }
+
+    // Firmware compilé à la main (pio run : .pio/build/<env>/firmware.bin), vérifié avant de toucher à l'écran.
+    async void File_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Firmware à installer", Filter = "Firmware ESP32-S3 (*.bin)|*.bin" };
+        if (dialog.ShowDialog(this) != true) return;
+        var image = await File.ReadAllBytesAsync(dialog.FileName);
+        if (FirmwareUpdate.Invalid(image) is { } why)
+        {
+            System.Windows.MessageBox.Show(this, why, "Mise à jour du firmware", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+        var name = Path.GetFileName(dialog.FileName);
+        await InstallAsync(progress => FirmwareUpdate.InstallFileAsync(image, name, progress));
+    }
+
+    async Task InstallAsync(Func<IProgress<string>, Task> install)
+    {
+        var app = (App)Application.Current;
+        app.Updating = true;
         installing = "Préparation…";
         ShowDevice();
         var progress = new Progress<string>(step => { installing = step; ShowDevice(); });
         try
         {
-            await Task.Run(() => FirmwareUpdate.InstallAsync(release, progress));
+            await Task.Run(() => install(progress));
         }
         catch (Exception ex)
         {
@@ -91,6 +123,7 @@ public partial class MainWindow : FluentWindow
         }
         finally
         {
+            app.Updating = false;
             installing = null;
             ShowDevice();
         }
@@ -108,6 +141,11 @@ public partial class MainWindow : FluentWindow
         ((App)Application.Current).Lang = code;
     }
 
+    void Companion_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (Companions.SelectedIndex >= 0) ((App)Application.Current).Companion = Companions.SelectedIndex;
+    }
+
     // Grise les compagnons que le firmware branché ne connaît pas encore.
     void ShowCompanions(Version? firmware)
     {
@@ -118,10 +156,10 @@ public partial class MainWindow : FluentWindow
             Companions.SelectedItem = Companions.Items.Cast<Companion>().FirstOrDefault(c => c.Supports(firmware));
     }
 
-    // Corps des PNG (vert) -> violet Teams, comme pal[2..4] dans esp32/src/main.cpp.
+    // Corps de Pousse (vert) -> violet Teams, comme pal[2..4] dans src/main.cpp du firmware.
     static readonly Dictionary<int, int> Body = new() { [0x38B764] = 0x6264A7, [0x257179] = 0x464775, [0xA7F070] = 0x9EA2FF };
 
-    // Sprite de l'ESP (esp32/sprites, embarqué en ressource) tel qu'affiché par l'écran.
+    // Sprite de l'ESP (sprites/<compagnon>/, embarqué en ressource) tel qu'affiché par l'écran.
     static BitmapSource Sprite(string name)
     {
         var png = new BitmapImage(new Uri($"pack://application:,,,/TeamsCompanion;component/sprites/{name}.png"));
