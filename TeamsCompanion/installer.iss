@@ -55,7 +55,8 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: 
 Root: HKCU; Subkey: "Software\OpenCompanion"; Flags: uninsdeletekey
 
 [Run]
-Filename: "{app}\TeamsCompanion.exe"; Description: "{cm:LaunchProgram,OpenCompanion}"; Flags: nowait postinstall skipifsilent
+; sans skipifsilent : la mise à jour automatique (/SILENT, lancée par l'appli qui s'est fermée) la relance
+Filename: "{app}\TeamsCompanion.exe"; Description: "{cm:LaunchProgram,OpenCompanion}"; Flags: nowait postinstall
 
 [UninstallDelete]
 ; jeton Microsoft Graph (DPAPI), esptool et firmware téléchargés : rien ne doit rester après désinstallation

@@ -47,7 +47,7 @@ puis `python <script> E:\AnthoDingo\OpenCompanion\sprites`. Regarder le résulta
    - `HAND[C_COUNT][3]` : ajouter `{contour, base, reflet}`, les index de palette des mains vues en DND ;
    - incrémenter `FW_VERSION` (ex. `0x0100` -> `0x0110`) : les sprites sont compilés dans le firmware ;
    - mettre à jour la liste des compagnons dans `README.md` du firmware (`0 Pousse, 1 chouette, ...`).
-3. Appli `TeamsCompanion/MainWindow.xaml.cs` : ajouter à la fin de `Companions.ItemsSource`
+3. Appli `TeamsCompanion/CompanionsPage.xaml.cs` : ajouter à la fin de `All`
    `new Companion("<Nom affiché>", Sprite("<nom>/idle"), new Version(<nouvelle version>))`.
 4. Appli `TeamsCompanion/Companion.cs` : `CompanionLink.ExpectedFirmware` = nouvelle version, plus une ligne de commentaire
    « X.Y = premier firmware qui embarque <Nom> ».
