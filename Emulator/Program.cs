@@ -23,6 +23,7 @@ static class Program
         ["VIDEO"] = new(["call1", "call2", "call1", "call2", "call2", "call1"], 180, 0xFF8C00, "En visio"),
         ["BUSY"] = new(["idle", "idle", "idle", "idle", "blink", "idle"], 300, 0xC4314B, "Occupe"),
         ["DND"] = new(["back"], 1000, 0xC4314B, "Ne pas deranger"),
+        ["NOTEAMS"] = new(["idle", "idle", "idle", "look", "look", "look", "idle", "blink", "idle", "idle"], 400, 0xD0D2EC, "Teams ferme"),
         ["OFFLINE"] = new(["offline"], 1000, 0x8A8886, ""),  // pas de texte, comme main.cpp
         ["UPDATE"] = new(["idle", "idle", "look", "idle", "blink", "idle", "squash", "idle"], 250, 0x3A5078, "Mise a jour"),
     };
@@ -31,7 +32,7 @@ static class Program
     static readonly Dictionary<int, int> Body = new() { [0x38B764] = 0x6264A7, [0x257179] = 0x464775, [0xA7F070] = 0x9EA2FF };
 
     // Même ordre que COMPANIONS de sprites/png2h.py.
-    public static readonly string[] Companions = ["pousse", "chouette", "magicien", "trombone", "calculatrice"];
+    public static readonly string[] Companions = ["pousse", "chouette", "magicien", "trombone", "calculatrice", "panda"];
 
     // Mains qui tapent en DND (contour, base, reflet), comme HAND dans main.cpp.
     static readonly Dictionary<string, int[]> Hand = new()
@@ -41,6 +42,7 @@ static class Program
         ["magicien"] = [0x1A1C2C, 0xFAC8A0, 0xF4F4F4],
         ["trombone"] = [0x1A1C2C, 0x94B0C2, 0xF4F4F4],
         ["calculatrice"] = [0x1A1C2C, 0x465AC8, 0x94B0C2],
+        ["panda"] = [0x1A1C2C, 0x080810, 0x94B0C2],
     };
 
     static readonly Dictionary<string, Color?[]> Frames = [];  // clé "compagnon/frame"
@@ -122,6 +124,7 @@ static class Program
         }
 
         if (state == "UPDATE") DrawProgress(g, t, oy + 32 * Scale + 4);
+        if (state == "NOTEAMS") DrawWaiting(g, t);
 
         g.TextRenderingHint = TextRenderingHint.SingleBitPerPixelGridFit;  // police bitmap sans lissage, comme TFT_eSPI
         var size = g.MeasureString(a.Label, LabelFont);
@@ -263,6 +266,21 @@ static class Program
         return hidden + (int)((peek - hidden) * e);
     }
 
+    // Comme drawWaiting() de main.cpp : bulle « … » en haut à droite, points levés tour à tour.
+    static void DrawWaiting(Graphics g, long t)
+    {
+        const int bx = W - 92, by = 16, bw = 70, bh = 32;
+        var ink = B(Q(0x1A1C2C));
+        var white = B(Color.White);
+        g.FillPolygon(ink, new Point[] { new(bx + 14, by + bh - 2), new(bx + 30, by + bh - 2), new(bx + 8, by + bh + 14) });
+        g.FillRoundedRectangle(ink, new Rectangle(bx - 2, by - 2, bw + 4, bh + 4), new Size(24, 24));
+        g.FillRoundedRectangle(white, new Rectangle(bx, by, bw, bh), new Size(20, 20));
+        g.FillPolygon(white, new Point[] { new(bx + 16, by + bh - 2), new(bx + 27, by + bh - 2), new(bx + 11, by + bh + 10) });
+        long up = t / 220 % 5;
+        for (int i = 0; i < 3; i++)
+            g.FillEllipse(B(Q(i == up ? 0x464775 : 0x8A8886)), bx + 17 + i * 18 - 5, by + bh / 2 - (i == up ? 4 : 0) - 5, 11, 11);
+    }
+
     // Comme drawPlug() de main.cpp : câble + prise débranchée, derrière le compagnon OFFLINE.
     static void DrawPlug(Graphics g, int ox, int oy)
     {
@@ -309,7 +327,7 @@ class EmulatorForm : Form
     // Libellés de l'UI : ceux de Anims suivent la police de l'ESP, sans accents.
     static readonly Dictionary<string, string> Names = new()
     {
-        ["BUSY"] = "Occupé", ["DND"] = "Ne pas déranger", ["OFFLINE"] = "Hors ligne", ["UPDATE"] = "Mise à jour", ["BRB"] = "Je reviens vite",
+        ["BUSY"] = "Occupé", ["DND"] = "Ne pas déranger", ["OFFLINE"] = "Hors ligne", ["NOTEAMS"] = "Teams fermé", ["UPDATE"] = "Mise à jour", ["BRB"] = "Je reviens vite",
     };
 
     readonly Bitmap screen = new(Program.W, Program.H);

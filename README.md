@@ -10,7 +10,7 @@ L'application Windows (`TeamsCompanion/`) déduit le statut localement, puis l'e
 
 | Détection sur le PC                         | Statut envoyé | Fond de l'écran |
 |---------------------------------------------|---------------|-----------------|
-| Teams n'est pas lancé                       | `OFFLINE`     | gris            |
+| Teams n'est pas lancé                       | `NOTEAMS`     | lavande         |
 | Teams utilise la caméra                     | `VIDEO`       | orange          |
 | Teams utilise le micro                      | `CALL`        | orange          |
 | Aucune activité clavier/souris depuis 5 min | `AWAY`        | jaune           |
@@ -68,7 +68,7 @@ Le firmware est dans un dépôt séparé : [OpenCompanion-Firmware](https://gith
 
 Prérequis : la nouvelle version de Teams.
 
-Téléchargez `OpenCompanion-Setup.exe` depuis les [releases](https://github.com/AnthoDingo/OpenCompanion/releases) et lancez-le. L'installation se fait pour l'utilisateur courant, sans droits administrateur, et n'a pas besoin de .NET (le runtime est inclus). Une case, cochée par défaut, lance OpenCompanion au démarrage de Windows. Une nouvelle version s'installe par-dessus l'ancienne, qu'il faut quitter avant. La désinstallation (Paramètres > Applications) supprime aussi les réglages, le jeton Microsoft Graph et esptool.
+Téléchargez `OpenCompanion-Setup.exe` depuis les [releases](https://github.com/AnthoDingo/OpenCompanion/releases) et lancez-le. L'installation se fait pour l'utilisateur courant, sans droits administrateur, et n'a pas besoin de .NET (le runtime est inclus). Une case, cochée par défaut, lance OpenCompanion au démarrage de Windows ; l'option se change ensuite dans **Paramètres** > **Démarrage** (une mise à jour ne la modifie pas). Une nouvelle version s'installe par-dessus l'ancienne, qu'il faut quitter avant. La désinstallation (Paramètres > Applications) supprime aussi les réglages, le jeton Microsoft Graph et esptool.
 
 L'application vérifie au démarrage, puis toutes les 6 heures, s'il existe une nouvelle version de l'application ou du firmware, et l'annonce par une notification Windows (une fois par version). Pour l'application, le bouton **Télécharger et installer** de la page **Paramètres** télécharge l'installeur, vérifie sa signature (ECDSA, même clé que les firmwares), l'installe et relance l'application. Rien n'est installé sans ce clic, ni si la signature est invalide.
 
@@ -82,6 +82,8 @@ dotnet run
 ```
 
 L'application démarre dans la zone de notification. Son icône prend la couleur du statut, et son info-bulle affiche le statut et indique si l'écran est branché. Clic droit pour **Ouvrir** ou **Quitter**.
+
+Quand vous verrouillez la session Windows, l'écran affiche **Absent** ou **De retour dans quelques minutes**, au choix dans **Paramètres** > **Session verrouillée**, jusqu'au déverrouillage. Un appel ou une visio en cours reste affiché. Teams lui-même n'est pas modifié.
 
 L'application attend que l'écran soit branché et se reconnecte toute seule s'il est débranché. Une seule instance peut tourner à la fois. `dotnet run -- --test` lance l'auto-test.
 
@@ -104,14 +106,14 @@ Il est produit dans `publish-installer\`.
 
 ## Modifier le compagnon
 
-Cinq compagnons au choix dans la page **Compagnons** de l'application (menu de gauche) : **Pousse**, **Chouette**, **Magicien**, **Trombone** et **Calculatrice**. Le choix est mémorisé et envoyé à l'écran avec le statut (`STATUT|Libellé|N`).
+Six compagnons au choix dans la page **Compagnons** de l'application (menu de gauche) : **Pousse**, **Chouette**, **Magicien**, **Trombone**, **Calculatrice** et **Panda**. Le choix est mémorisé et envoyé à l'écran avec le statut (`STATUT|Libellé|N`).
 
 Les sprites sont des PNG 32×32 dans `sprites/<compagnon>/`, affichés 6 fois plus grands. Chaque compagnon a les mêmes frames (`idle`, `look`, `blink`, `squash`, `jump`, `away1`, `away2`, `call1`, `call2`, `offline`). Ils se retouchent avec n'importe quel éditeur pixel art (Aseprite, Piskel…), en gardant :
 
 - un fond transparent ;
 - uniquement les couleurs de la palette définie dans `png2h.py`.
 
-Après modification, régénérez `sprites/sprites.h`, puis recopiez-le dans `src/` du dépôt firmware :
+Après modification, régénérez les en-têtes du firmware : `src/sprites.h` (palette, liste des compagnons) et un fichier par compagnon, `src/companions/<compagnon>.h`. Le script les écrit directement dans le dépôt firmware cloné à côté de celui-ci (`../OpenCompanion-Firmware`), ou dans le dossier `src` passé en argument :
 
 ```
 python sprites/png2h.py

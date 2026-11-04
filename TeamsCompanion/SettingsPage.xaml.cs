@@ -20,6 +20,8 @@ public partial class SettingsPage : Page
         LangBox.SelectedValue = App.Lang;
         DetectGraph.IsChecked = App.UseGraph;
         DetectClient.IsChecked = !DetectGraph.IsChecked;
+        AutoStartSwitch.IsChecked = App.AutoStart;
+        (App.LockStatus == "BRB" ? LockBrb : LockAway).IsChecked = true;
 
         // L'appli détecte l'écran et lit les releases en tâche de fond ; la page affiche juste leur état.
         refresh.Tick += (_, _) => Show();
@@ -68,6 +70,10 @@ public partial class SettingsPage : Page
         App.Lang = code;
         Show();  // textes calculés ici : pas d'attente du prochain tick
     }
+
+    void AutoStart_Click(object sender, RoutedEventArgs e) => App.AutoStart = AutoStartSwitch.IsChecked == true;
+
+    void Lock_Click(object sender, RoutedEventArgs e) => App.LockStatus = LockBrb.IsChecked == true ? "BRB" : "AWAY";
 
     void Detection_Checked(object sender, RoutedEventArgs e)
     {

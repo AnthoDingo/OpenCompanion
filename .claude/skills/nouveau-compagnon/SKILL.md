@@ -6,7 +6,7 @@ description: Crée un nouveau compagnon OpenCompanion (sprites 32x32 de toutes l
 # Créer un compagnon OpenCompanion
 
 Deux dépôts : l'appli `E:\AnthoDingo\OpenCompanion` (sprites, appli WPF, émulateur) et le firmware
-`E:\AnthoDingo\OpenCompanion-Firmware` (`src/main.cpp`, `src/sprites.h`). Relire chaque fichier avant de l'éditer :
+`E:\AnthoDingo\OpenCompanion-Firmware` (`src/main.cpp`, `src/sprites.h`, `src/companions/<nom>.h`). Relire chaque fichier avant de l'éditer :
 le projet bouge souvent.
 
 ## 1. Dessiner les frames
@@ -41,8 +41,8 @@ puis `python <script> E:\AnthoDingo\OpenCompanion\sprites`. Regarder le résulta
 
 ## 2. Brancher le compagnon (toujours ajouter À LA FIN : l'index est le numéro envoyé à l'écran)
 
-1. `sprites/png2h.py` : ajouter le nom à la fin de `COMPANIONS`, puis `python sprites/png2h.py`
-   et copier `sprites/sprites.h` vers `OpenCompanion-Firmware/src/sprites.h`.
+1. `sprites/png2h.py` : ajouter le nom à la fin de `COMPANIONS`, puis `python sprites/png2h.py` : il écrit
+   `src/sprites.h` et `src/companions/<nom>.h` directement dans `../OpenCompanion-Firmware` (rien à recopier).
 2. Firmware `src/main.cpp` :
    - `HAND[C_COUNT][3]` : ajouter `{contour, base, reflet}`, les index de palette des mains vues en DND ;
    - incrémenter `FW_VERSION` (ex. `0x0100` -> `0x0110`) : les sprites sont compilés dans le firmware ;

@@ -16,7 +16,7 @@ using Microsoft.Win32;
 namespace TeamsCompanion;
 
 // Statut déduit localement, sans Graph ni tenant :
-//   Teams fermé -> OFFLINE, caméra utilisée par Teams -> VIDEO, micro -> CALL,
+//   Teams fermé -> NOTEAMS, caméra utilisée par Teams -> VIDEO, micro -> CALL,
 //   PC inactif > 5 min -> AWAY (même seuil que Teams), sinon AVAILABLE.
 // ponytail: les statuts manuels (Occupé / Ne pas déranger) ne sont pas visibles localement.
 static class Presence
@@ -24,7 +24,7 @@ static class Presence
     static readonly TimeSpan AwayAfter = TimeSpan.FromMinutes(5);
 
     public static string Decide(bool running, bool mic, bool cam, TimeSpan idle) =>
-        !running ? "OFFLINE" : cam ? "VIDEO" : mic ? "CALL" : idle > AwayAfter ? "AWAY" : "AVAILABLE";
+        !running ? "NOTEAMS" : cam ? "VIDEO" : mic ? "CALL" : idle > AwayAfter ? "AWAY" : "AVAILABLE";
 
     public static string Current() =>
         Decide(TeamsRunning(), TeamsUses("microphone"), TeamsUses("webcam"), Idle());
@@ -33,7 +33,7 @@ static class Presence
 
     public static void SelfTest()
     {
-        Trace.Assert(Decide(false, true, true, TimeSpan.Zero) == "OFFLINE");
+        Trace.Assert(Decide(false, true, true, TimeSpan.Zero) == "NOTEAMS");
         Trace.Assert(Decide(true, true, true, TimeSpan.FromHours(1)) == "VIDEO");
         Trace.Assert(Decide(true, true, false, TimeSpan.FromHours(1)) == "CALL");
         Trace.Assert(Decide(true, false, false, TimeSpan.FromMinutes(6)) == "AWAY");
@@ -87,7 +87,7 @@ sealed class TeamsLog
 
     // local : détection locale (inactivité) quand le log n'a encore rien dit d'utile.
     public static string Decide(bool running, bool mic, bool cam, string? availability, Func<string> local) =>
-        !running ? "OFFLINE" : cam ? "VIDEO" : mic ? "CALL"
+        !running ? "NOTEAMS" : cam ? "VIDEO" : mic ? "CALL"
         : availability is null or "PresenceUnknown" ? local()
         : GraphPresence.Map(availability, "");
 
@@ -120,7 +120,7 @@ sealed class TeamsLog
         Trace.Assert(Availability.Match("2026-10-29T19:33:15.585759+01:00 0x00005860 <INFO> native_modules::UserDataCrossCloudModule: " +
             "Received Action: UserPresenceAction: {cloud_context: https://teams.live.com, availability: DoNotDisturb}").Groups[1].Value == "DoNotDisturb");
         Func<string> local = () => "AWAY";
-        Trace.Assert(Decide(false, true, true, "Available", local) == "OFFLINE");
+        Trace.Assert(Decide(false, true, true, "Available", local) == "NOTEAMS");
         Trace.Assert(Decide(true, false, true, "Available", local) == "VIDEO");
         Trace.Assert(Decide(true, true, false, "Available", local) == "CALL");
         Trace.Assert(Decide(true, false, false, "DoNotDisturb", local) == "DND");
@@ -265,12 +265,12 @@ static class Localize
 
     static readonly Dictionary<string, Dictionary<string, string>> Labels = new()
     {
-        ["fr"] = new() { ["OFFLINE"] = "Hors ligne", ["AVAILABLE"] = "Disponible", ["AWAY"] = "Absent", ["BRB"] = "Je reviens vite", ["CALL"] = "En appel", ["VIDEO"] = "En visio", ["BUSY"] = "Occupe", ["DND"] = "Ne pas deranger", ["UPDATE"] = "Mise a jour" },
-        ["en"] = new() { ["OFFLINE"] = "Offline", ["AVAILABLE"] = "Available", ["AWAY"] = "Away", ["BRB"] = "Be right back", ["CALL"] = "In a call", ["VIDEO"] = "Video call", ["BUSY"] = "Busy", ["DND"] = "Do not disturb", ["UPDATE"] = "Updating" },
-        ["de"] = new() { ["OFFLINE"] = "Offline", ["AVAILABLE"] = "Verfuegbar", ["AWAY"] = "Abwesend", ["BRB"] = "Gleich zurueck", ["CALL"] = "Im Anruf", ["VIDEO"] = "Videoanruf", ["BUSY"] = "Beschaeftigt", ["DND"] = "Nicht stoeren", ["UPDATE"] = "Update" },
-        ["es"] = new() { ["OFFLINE"] = "Sin conexion", ["AVAILABLE"] = "Disponible", ["AWAY"] = "Ausente", ["BRB"] = "Ahora vuelvo", ["CALL"] = "En llamada", ["VIDEO"] = "Videollamada", ["BUSY"] = "Ocupado", ["DND"] = "No molestar", ["UPDATE"] = "Actualizando" },
-        ["it"] = new() { ["OFFLINE"] = "Offline", ["AVAILABLE"] = "Disponibile", ["AWAY"] = "Assente", ["BRB"] = "Torno subito", ["CALL"] = "In chiamata", ["VIDEO"] = "Videochiamata", ["BUSY"] = "Occupato", ["DND"] = "Non disturbare", ["UPDATE"] = "Aggiornamento" },
-        ["pt"] = new() { ["OFFLINE"] = "Offline", ["AVAILABLE"] = "Disponivel", ["AWAY"] = "Ausente", ["BRB"] = "Volto ja", ["CALL"] = "Em chamada", ["VIDEO"] = "Videochamada", ["BUSY"] = "Ocupado", ["DND"] = "Nao incomodar", ["UPDATE"] = "Atualizando" },
+        ["fr"] = new() { ["OFFLINE"] = "Hors ligne", ["NOTEAMS"] = "Teams ferme", ["AVAILABLE"] = "Disponible", ["AWAY"] = "Absent", ["BRB"] = "Je reviens vite", ["CALL"] = "En appel", ["VIDEO"] = "En visio", ["BUSY"] = "Occupe", ["DND"] = "Ne pas deranger", ["UPDATE"] = "Mise a jour" },
+        ["en"] = new() { ["OFFLINE"] = "Offline", ["NOTEAMS"] = "Teams closed", ["AVAILABLE"] = "Available", ["AWAY"] = "Away", ["BRB"] = "Be right back", ["CALL"] = "In a call", ["VIDEO"] = "Video call", ["BUSY"] = "Busy", ["DND"] = "Do not disturb", ["UPDATE"] = "Updating" },
+        ["de"] = new() { ["OFFLINE"] = "Offline", ["NOTEAMS"] = "Teams beendet", ["AVAILABLE"] = "Verfuegbar", ["AWAY"] = "Abwesend", ["BRB"] = "Gleich zurueck", ["CALL"] = "Im Anruf", ["VIDEO"] = "Videoanruf", ["BUSY"] = "Beschaeftigt", ["DND"] = "Nicht stoeren", ["UPDATE"] = "Update" },
+        ["es"] = new() { ["OFFLINE"] = "Sin conexion", ["NOTEAMS"] = "Teams cerrado", ["AVAILABLE"] = "Disponible", ["AWAY"] = "Ausente", ["BRB"] = "Ahora vuelvo", ["CALL"] = "En llamada", ["VIDEO"] = "Videollamada", ["BUSY"] = "Ocupado", ["DND"] = "No molestar", ["UPDATE"] = "Actualizando" },
+        ["it"] = new() { ["OFFLINE"] = "Offline", ["NOTEAMS"] = "Teams chiuso", ["AVAILABLE"] = "Disponibile", ["AWAY"] = "Assente", ["BRB"] = "Torno subito", ["CALL"] = "In chiamata", ["VIDEO"] = "Videochiamata", ["BUSY"] = "Occupato", ["DND"] = "Non disturbare", ["UPDATE"] = "Aggiornamento" },
+        ["pt"] = new() { ["OFFLINE"] = "Offline", ["NOTEAMS"] = "Teams fechado", ["AVAILABLE"] = "Disponivel", ["AWAY"] = "Ausente", ["BRB"] = "Volto ja", ["CALL"] = "Em chamada", ["VIDEO"] = "Videochamada", ["BUSY"] = "Ocupado", ["DND"] = "Nao incomodar", ["UPDATE"] = "Atualizando" },
     };
 
     public static string Label(string lang, string status) =>
@@ -288,6 +288,12 @@ static class Localize
         ["CompanionRequirement"] = ["Firmware {0} minimum", "Firmware {0} or later", "Firmware {0} oder neuer", "Firmware {0} o posterior", "Firmware {0} o successivo", "Firmware {0} ou posterior"],
         ["Language"] = ["Langue", "Language", "Sprache", "Idioma", "Lingua", "Idioma"],
         ["LanguageHint"] = ["Langue de l'application et des libellés de l'écran.", "Language of the app and of the screen labels.", "Sprache der App und der Display-Beschriftungen.", "Idioma de la aplicación y de los textos de la pantalla.", "Lingua dell'app e delle scritte sullo schermo.", "Idioma do aplicativo e dos textos da tela."],
+        ["Startup"] = ["Démarrage", "Startup", "Autostart", "Inicio", "Avvio", "Inicialização"],
+        ["StartupToggle"] = ["Lancer OpenCompanion au démarrage de Windows", "Start OpenCompanion when Windows starts", "OpenCompanion beim Windows-Start starten", "Iniciar OpenCompanion al iniciar Windows", "Avvia OpenCompanion all'avvio di Windows", "Iniciar o OpenCompanion com o Windows"],
+        ["Lock"] = ["Session verrouillée", "Locked session", "Gesperrte Sitzung", "Sesión bloqueada", "Sessione bloccata", "Sessão bloqueada"],
+        ["LockHint"] = ["Statut affiché par l'écran quand vous verrouillez Windows (un appel en cours reste affiché).", "Status shown on the screen when you lock Windows (an ongoing call is still shown).", "Status auf dem Display, wenn Sie Windows sperren (ein laufender Anruf bleibt sichtbar).", "Estado que muestra la pantalla al bloquear Windows (una llamada en curso se sigue mostrando).", "Stato mostrato sullo schermo quando blocchi Windows (una chiamata in corso resta visibile).", "Status exibido na tela quando você bloqueia o Windows (uma chamada em andamento continua visível)."],
+        ["LockAway"] = ["Absent", "Away", "Abwesend", "Ausente", "Assente", "Ausente"],
+        ["LockBrb"] = ["De retour dans quelques minutes", "Be right back", "Gleich zurück", "Vuelvo enseguida", "Torno subito", "Volto já"],
         ["AppUpdate"] = ["Mise à jour de l'application", "App update", "App-Update", "Actualización de la aplicación", "Aggiornamento dell'app", "Atualização do aplicativo"],
         ["AppUpToDate"] = ["Version {0}, à jour.", "Version {0}, up to date.", "Version {0}, aktuell.", "Versión {0}, actualizada.", "Versione {0}, aggiornata.", "Versão {0}, atualizada."],
         ["AppAvailable"] = ["Version {0} disponible (actuelle : {1}).", "Version {0} available (current: {1}).", "Version {0} verfügbar (aktuell: {1}).", "Versión {0} disponible (actual: {1}).", "Versione {0} disponibile (attuale: {1}).", "Versão {0} disponível (atual: {1})."],
@@ -342,7 +348,7 @@ static class Localize
 
     public static void SelfTest()
     {
-        string[] codes = { "OFFLINE", "AVAILABLE", "AWAY", "BRB", "CALL", "VIDEO", "BUSY", "DND", "UPDATE" };
+        string[] codes = { "OFFLINE", "NOTEAMS", "AVAILABLE", "AWAY", "BRB", "CALL", "VIDEO", "BUSY", "DND", "UPDATE" };
         foreach (var l in Languages)
             foreach (var c in codes)
                 Trace.Assert(Labels[l.Code].ContainsKey(c), $"libellé manquant {l.Code}/{c}");
@@ -373,7 +379,8 @@ sealed class CompanionLink : IDisposable
 {
     // Version attendue du firmware : égale à FW_VERSION de esp32/src/main.cpp (annoncée en bcdDevice USB).
     // Quand une version ajoute un statut ou un compagnon, noter ici « X.Y = premier firmware qui ... ».
-    public static readonly Version ExpectedFirmware = new(1, 0);
+    // 1.1 = premier firmware qui connaît NOTEAMS (Teams fermé) ; avant, il l'affiche comme OFFLINE.
+    public static readonly Version ExpectedFirmware = new(1, 1);
 
     // Ligne envoyée à l'écran : statut, libellé localisé, numéro du compagnon.
     public static string Wire(string status, string label, int companion) => $"{status}|{label}|{companion}";

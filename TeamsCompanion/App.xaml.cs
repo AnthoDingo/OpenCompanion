@@ -21,6 +21,7 @@ public partial class App : Application
         ["BUSY"] = 0xC4314B,
         ["DND"] = 0xC4314B,
         ["OFFLINE"] = 0x8A8886,
+        ["NOTEAMS"] = 0xD0D2EC,
         ["UPDATE"] = 0x3A5078,
     };
 
@@ -81,6 +82,45 @@ public partial class App : Application
             sent = "";
         }
     }
+    // Même valeur que l'installeur (installer.iss) : la case de l'installation et l'option de la page Paramètres
+    // pilotent la même chose. Chemin de l'exe qui tourne : celui de l'installation, ou d'un build de dev.
+    const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    internal bool AutoStart
+    {
+        get => Registry.CurrentUser.OpenSubKey(RunKey)?.GetValue("OpenCompanion") != null;
+        set
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(RunKey);
+            if (value) key.SetValue("OpenCompanion", $"\"{Environment.ProcessPath}\"");
+            else key.DeleteValue("OpenCompanion", throwOnMissingValue: false);
+        }
+    }
+    string lockStatus = Registry.CurrentUser.OpenSubKey(@"Software\OpenCompanion")?.GetValue("LockStatus") as string ?? "AWAY";
+
+    // Statut de l'écran quand la session Windows est verrouillée (AWAY ou BRB), choisi dans la page Paramètres.
+    internal string LockStatus
+    {
+        get => lockStatus;
+        set
+        {
+            lockStatus = value;
+            Registry.CurrentUser.CreateSubKey(@"Software\OpenCompanion").SetValue("LockStatus", value);
+            sent = "";
+        }
+    }
+    bool locked;  // session verrouillée (l'appli démarre à l'ouverture de session : déverrouillée)
+
+    // Session verrouillée : le statut choisi remplace celui de Teams, sauf appel/visio en cours, Teams fermé ou mise à jour.
+    internal static string WhenLocked(string status, bool locked, string lockStatus) =>
+        locked && status is not ("CALL" or "VIDEO" or "OFFLINE" or "UPDATE") ? lockStatus : status;
+
+    // SystemEvents rappelle sur le thread UI (abonnement fait depuis celui-ci) ; Tick prend le relais dans la seconde.
+    void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
+    {
+        if (e.Reason == SessionSwitchReason.SessionLock) locked = true;
+        else if (e.Reason == SessionSwitchReason.SessionUnlock) locked = false;
+    }
+
     bool updating;
 
     // Étape en cours de la mise à jour du firmware (null : aucune), affichée par la page Paramètres.
@@ -123,6 +163,11 @@ public partial class App : Application
             FirmwareUpdate.SelfTest();
             AppUpdate.SelfTest();
             CompanionLink.SelfTest();
+            Trace.Assert(WhenLocked("AVAILABLE", true, "BRB") == "BRB");
+            Trace.Assert(WhenLocked("DND", true, "AWAY") == "AWAY");
+            Trace.Assert(WhenLocked("CALL", true, "AWAY") == "CALL");      // appel en cours : reste affiché
+            Trace.Assert(WhenLocked("OFFLINE", true, "AWAY") == "OFFLINE"); // Teams fermé
+            Trace.Assert(WhenLocked("BUSY", false, "AWAY") == "BUSY");
             Shutdown();
             return;
         }
@@ -143,6 +188,7 @@ public partial class App : Application
         ApplyLang();
         tray = new Forms.NotifyIcon { Icon = icons["OFFLINE"], Text = "OpenCompanion", ContextMenuStrip = menu, Visible = true };
         tray.DoubleClick += (_, _) => ShowWindow();
+        SystemEvents.SessionSwitch += OnSessionSwitch;
         tray.BalloonTipClicked += (_, _) => ShowWindow(settings: true);  // les paramètres proposent d'installer le firmware ou la nouvelle version
 
         // ponytail: détection + envoi HID sur le thread UI (quelques ms), thread dédié si ça saccade
@@ -212,7 +258,7 @@ public partial class App : Application
 
     void Tick()
     {
-        var status = updating ? "UPDATE" : useGraph ? graph!() : teamsLog.Current();
+        var status = updating ? "UPDATE" : WhenLocked(useGraph ? graph!() : teamsLog.Current(), locked, lockStatus);
 
         // Renvoi périodique : l'ESP repasse OFFLINE s'il n'entend plus rien (PC en veille, câble débranché).
         if (status != sent || DateTime.Now - lastSent > TimeSpan.FromSeconds(10))
@@ -244,6 +290,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        SystemEvents.SessionSwitch -= OnSessionSwitch;  // événement statique : se désabonner, sinon fuite
         if (tray != null) tray.Visible = false;  // sinon l'icône reste affichée jusqu'au survol
         tray?.Dispose();
         link.Dispose();

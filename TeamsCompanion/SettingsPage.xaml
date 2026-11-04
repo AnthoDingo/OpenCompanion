@@ -20,6 +20,29 @@
 
             <ui:Card Margin="0,0,0,8">
                 <StackPanel>
+                    <ui:TextBlock Text="{Binding [Startup], Source={x:Static local:Tr.I}}" FontTypography="BodyStrong" Margin="0,0,0,8" />
+                    <!-- Click et non Checked : seul un geste de l'utilisateur écrit le registre (pas l'initialisation de la page) -->
+                    <ui:ToggleSwitch x:Name="AutoStartSwitch" Content="{Binding [StartupToggle], Source={x:Static local:Tr.I}}"
+                                     Click="AutoStart_Click" />
+                </StackPanel>
+            </ui:Card>
+
+            <ui:Card Margin="0,0,0,8">
+                <StackPanel>
+                    <ui:TextBlock Text="{Binding [Lock], Source={x:Static local:Tr.I}}" FontTypography="BodyStrong" />
+                    <ui:TextBlock Text="{Binding [LockHint], Source={x:Static local:Tr.I}}" Margin="0,2,0,8" TextWrapping="Wrap"
+                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton x:Name="LockAway" Content="{Binding [LockAway], Source={x:Static local:Tr.I}}"
+                                     GroupName="Lock" Margin="0,0,24,0" Click="Lock_Click" />
+                        <RadioButton x:Name="LockBrb" Content="{Binding [LockBrb], Source={x:Static local:Tr.I}}"
+                                     GroupName="Lock" Click="Lock_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </ui:Card>
+
+            <ui:Card Margin="0,0,0,8">
+                <StackPanel>
                     <ui:TextBlock Text="{Binding [AppUpdate], Source={x:Static local:Tr.I}}" FontTypography="BodyStrong" Margin="0,0,0,8" />
                     <ui:InfoBar x:Name="AppBar" IsOpen="True" IsClosable="False" />
                     <ui:Button x:Name="AppUpdateButton" Appearance="Primary" Margin="0,8,0,0"

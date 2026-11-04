@@ -11,7 +11,7 @@
     <!-- Pousse en violet Teams, 16 à 256 px ; les fenêtres WPF reprennent l'icône de l'exe -->
     <ApplicationIcon>app.ico</ApplicationIcon>
     <!-- version des builds hors tag ; un tag vX.Y.Z la remplace en CI (app.yml) -->
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

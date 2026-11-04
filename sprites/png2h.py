@@ -1,15 +1,16 @@
-"""Convertit sprites/<compagnon>/*.png (32x32, couleurs de PALETTE, fond transparent) en sprites/sprites.h.
+"""Convertit sprites/<compagnon>/*.png (32x32, couleurs de PALETTE, fond transparent) en en-têtes C du firmware :
+src/sprites.h (palette, enums, table SPR_FRAMES) et src/companions/<compagnon>.h (les frames d'un compagnon).
 
-Usage : python sprites/png2h.py   (à relancer après chaque modif d'un PNG)
+Usage : python sprites/png2h.py [dossier src du firmware]   (à relancer après chaque modif d'un PNG)
+Par défaut : ../OpenCompanion-Firmware/src, le dépôt firmware cloné à côté de celui-ci.
 Le nom du fichier donne le nom de la frame : idle.png -> F_IDLE. Chaque compagnon a les mêmes frames.
 L'ordre de COMPANIONS donne le numéro envoyé par l'appli (STATUT|Libellé|N) : ne pas le changer, ajouter à la fin.
-Recopiez ensuite sprites.h dans src/ du dépôt OpenCompanion-Firmware.
 """
 import sys
 from pathlib import Path
 from PIL import Image
 
-COMPANIONS = ["pousse", "chouette", "magicien", "trombone", "calculatrice"]
+COMPANIONS = ["pousse", "chouette", "magicien", "trombone", "calculatrice", "panda"]
 
 # Index 2-4 = corps de Pousse (base, ombre, reflet) : l'ESP les recolore en violet Teams.
 # 10-16 : chouette (brun, brun foncé, crème, jaune) et magicien (bleu, bleu foncé, peau).
@@ -50,19 +51,29 @@ def rgb565(c):
     return 0 if c is None else ((c[0] & 0xF8) << 8) | ((c[1] & 0xFC) << 3) | (c[2] >> 3)
 
 
-out = ["// Généré par sprites/png2h.py, ne pas éditer à la main.", "#pragma once", "#include <stdint.h>", "",
+src = Path(sys.argv[1]) if len(sys.argv) > 1 else here.parent.parent / "OpenCompanion-Firmware" / "src"
+if not (src / "main.cpp").exists():
+    sys.exit(f"{src} : pas de main.cpp, donnez le dossier src du dépôt OpenCompanion-Firmware")
+HEADER = "// Généré par sprites/png2h.py (dépôt OpenCompanion), ne pas éditer à la main."
+
+# Un fichier par compagnon : SPR_<NOM>[F_COUNT][...], inclus par sprites.h qui définit Frame et SPR_SIZE.
+(src / "companions").mkdir(exist_ok=True)
+for c, frames in sets.items():
+    out = [HEADER, "#pragma once", "", f"const uint8_t SPR_{c.upper()}[F_COUNT][SPR_SIZE * SPR_SIZE] = {{"]
+    for name, px in frames.items():
+        out.append(f"  {{ // {name}")
+        out += ["    " + ",".join(map(str, px[y * SIZE:(y + 1) * SIZE])) + "," for y in range(SIZE)]
+        out.append("  },")
+    out.append("};")
+    (src / "companions" / f"{c}.h").write_text("\n".join(out) + "\n", encoding="utf-8")
+
+out = [HEADER, "#pragma once", "#include <stdint.h>", "",
        f"const int SPR_SIZE = {SIZE};",
        "const uint16_t SPR_PALETTE[] = {" + ", ".join(f"0x{rgb565(c):04X}" for c in PALETTE) + "};",
        "enum Frame : uint8_t { " + ", ".join(names) + ", F_COUNT };",
-       "enum Companion : uint8_t { " + ", ".join("C_" + c.upper() for c in COMPANIONS) + ", C_COUNT };",
-       f"const uint8_t SPR_FRAMES[C_COUNT][F_COUNT][{SIZE * SIZE}] = {{"]
-for c, frames in sets.items():
-    out.append(f"  {{ // C_{c.upper()}")
-    for name, px in frames.items():
-        out.append(f"    {{ // {name}")
-        out += ["      " + ",".join(map(str, px[y * SIZE:(y + 1) * SIZE])) + "," for y in range(SIZE)]
-        out.append("    },")
-    out.append("  },")
-out.append("};")
-(here / "sprites.h").write_text("\n".join(out) + "\n", encoding="utf-8")
-print(f"{len(COMPANIONS)} compagnons x {len(names)} frames -> sprites/sprites.h (à recopier dans src/ du dépôt firmware)")
+       "enum Companion : uint8_t { " + ", ".join("C_" + c.upper() for c in COMPANIONS) + ", C_COUNT };", ""]
+out += [f'#include "companions/{c}.h"' for c in COMPANIONS]
+out += ["", "// SPR_FRAMES[compagnon][frame] : pixels (index de SPR_PALETTE) de la frame, ligne par ligne.",
+        "const uint8_t (*const SPR_FRAMES[C_COUNT])[SPR_SIZE * SPR_SIZE] = {" + ", ".join(f"SPR_{c.upper()}" for c in COMPANIONS) + "};"]
+(src / "sprites.h").write_text("\n".join(out) + "\n", encoding="utf-8")
+print(f"{len(COMPANIONS)} compagnons x {len(names)} frames -> {src / 'sprites.h'} + companions/*.h")

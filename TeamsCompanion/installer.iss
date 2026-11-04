@@ -37,7 +37,8 @@ fr.Startup=Lancer OpenCompanion au démarrage de Windows
 en.Startup=Start OpenCompanion when Windows starts
 
 [Tasks]
-Name: "startup"; Description: "{cm:Startup}"
+; première installation seulement : ensuite, c'est l'option de la page Paramètres de l'appli qui décide
+Name: "startup"; Description: "{cm:Startup}"; Check: not IsUpgrade
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Flags: unchecked
 
 [Files]
@@ -48,15 +49,22 @@ Name: "{autoprograms}\OpenCompanion"; Filename: "{app}\TeamsCompanion.exe"
 Name: "{autodesktop}\OpenCompanion"; Filename: "{app}\TeamsCompanion.exe"; Tasks: desktopicon
 
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "OpenCompanion"; ValueData: """{app}\TeamsCompanion.exe"""; Flags: uninsdeletevalue; Tasks: startup
-; mise à jour avec la case décochée : retirer le lancement auto posé par une installation précédente
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "OpenCompanion"; Flags: deletevalue; Tasks: not startup
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "OpenCompanion"; ValueData: """{app}\TeamsCompanion.exe"""; Tasks: startup
+; à la désinstallation, retirer le lancement auto quel que soit qui l'a posé (installeur ou option de l'appli)
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "OpenCompanion"; Flags: uninsdeletevalue
 ; réglages de l'appli (langue, compagnon) : supprimés à la désinstallation
 Root: HKCU; Subkey: "Software\OpenCompanion"; Flags: uninsdeletekey
 
 [Run]
 ; sans skipifsilent : la mise à jour automatique (/SILENT, lancée par l'appli qui s'est fermée) la relance
 Filename: "{app}\TeamsCompanion.exe"; Description: "{cm:LaunchProgram,OpenCompanion}"; Flags: nowait postinstall
+
+[Code]
+// Une installation existe déjà (même AppId) : c'est une mise à jour.
+function IsUpgrade: Boolean;
+begin
+  Result := RegValueExists(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{F864111C-DE56-4B0B-B670-12BA03EEB532}_is1', 'UninstallString');
+end;
 
 [UninstallDelete]
 ; jeton Microsoft Graph (DPAPI), esptool et firmware téléchargés : rien ne doit rester après désinstallation
