@@ -13,7 +13,7 @@ holes = [26, 29];     // entraxe des 4 trous
 glass = [27.97, 32.63];
 glass_top = 0;        // écart haut de la vitre / haut du PCB
 front_stack = 2.6;    // vitre + LCD devant le PCB  -> à mesurer
-back_gap = 4.6;       // composants derrière le PCB (connecteur BAT)  -> à mesurer
+back_gap = 7.1;      // composants derrière le PCB (connecteur BAT)  -> à mesurer
 usb_y = 19;           // centre USB-C depuis le haut de la carte
 
 // --- Boîtier ---
@@ -54,8 +54,8 @@ module coque() {
         translate([(W - glass.x)/2 + lip, pcb_top - glass_top - glass.y + lip, -1])
             rbox([glass.x - 2*lip, glass.y - 2*lip, front + 2], 3);
         // USB-C (côté +X), fiche comprise
-        translate([W - wall - 1, pcb_top - usb_y - 6.25, pcb_back - 1.6])
-            cube([wall + 2, 12.5, 7]);
+        translate([W - wall - 1, pcb_top - usb_y - 6.25, pcb_back - 0.35])
+            cube([wall + 2, 12.5, 4.5]);
         // rainures où se clipse le couvercle (haut et bas, loin de l'USB-C)
         for (y = [foot_h, foot_h + cav.y])
             translate([W/2 - snap_l/2 - 0.5, y, D - lid_t/2]) rotate([0, 90, 0]) cylinder(r = 0.6, h = snap_l + 1);

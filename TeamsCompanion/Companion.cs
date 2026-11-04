@@ -379,7 +379,7 @@ sealed class CompanionLink : IDisposable
 {
     // Version attendue du firmware : égale à FW_VERSION de esp32/src/main.cpp (annoncée en bcdDevice USB).
     // Quand une version ajoute un statut ou un compagnon, noter ici « X.Y = premier firmware qui ... ».
-    // 1.1 = premier firmware qui connaît NOTEAMS (Teams fermé) ; avant, il l'affiche comme OFFLINE.
+    // 1.1 = premier firmware qui connaît NOTEAMS (Teams fermé) ; avant, il l'affiche comme OFFLINE. Embarque aussi le Panda.
     public static readonly Version ExpectedFirmware = new(1, 1);
 
     // Ligne envoyée à l'écran : statut, libellé localisé, numéro du compagnon.

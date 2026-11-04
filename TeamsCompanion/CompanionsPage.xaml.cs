@@ -29,7 +29,7 @@ public partial class CompanionsPage : Page
         new("Magicien", Sprite("magicien/idle"), new Version(1, 0)),
         new("Trombone", Sprite("trombone/idle"), new Version(1, 0)),
         new("Calculatrice", Sprite("calculatrice/idle"), new Version(1, 0)),
-        new("Panda", Sprite("panda/idle"), new Version(1, 0)),
+        new("Panda", Sprite("panda/idle"), new Version(1, 1)),
     };
 
     readonly DispatcherTimer refresh = new() { Interval = TimeSpan.FromSeconds(1) };

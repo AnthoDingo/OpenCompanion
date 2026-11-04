@@ -112,7 +112,7 @@ public partial class App : Application
 
     // Session verrouillée : le statut choisi remplace celui de Teams, sauf appel/visio en cours, Teams fermé ou mise à jour.
     internal static string WhenLocked(string status, bool locked, string lockStatus) =>
-        locked && status is not ("CALL" or "VIDEO" or "OFFLINE" or "UPDATE") ? lockStatus : status;
+        locked && status is not ("CALL" or "VIDEO" or "NOTEAMS" or "OFFLINE" or "UPDATE") ? lockStatus : status;
 
     // SystemEvents rappelle sur le thread UI (abonnement fait depuis celui-ci) ; Tick prend le relais dans la seconde.
     void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
@@ -166,7 +166,8 @@ public partial class App : Application
             Trace.Assert(WhenLocked("AVAILABLE", true, "BRB") == "BRB");
             Trace.Assert(WhenLocked("DND", true, "AWAY") == "AWAY");
             Trace.Assert(WhenLocked("CALL", true, "AWAY") == "CALL");      // appel en cours : reste affiché
-            Trace.Assert(WhenLocked("OFFLINE", true, "AWAY") == "OFFLINE"); // Teams fermé
+            Trace.Assert(WhenLocked("NOTEAMS", true, "AWAY") == "NOTEAMS"); // Teams fermé
+            Trace.Assert(WhenLocked("OFFLINE", true, "AWAY") == "OFFLINE");
             Trace.Assert(WhenLocked("BUSY", false, "AWAY") == "BUSY");
             Shutdown();
             return;
